@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="Geocoder/Geocoder.csproj" />
+  <Project Path="VicServoPriceWatch/VicServoPriceWatch.csproj" />
+</Solution>
