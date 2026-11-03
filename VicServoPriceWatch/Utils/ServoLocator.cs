@@ -2,65 +2,19 @@
 
 namespace VicServoPriceWatch;
 
-internal class ServoUtils
+internal class ServoLocator
 {
     /// <summary>
-    /// Normalizes station addresses by extracting missing postcodes and suburbs
-    /// from the station address text.
+    /// Finds the nearest service stations to the specified coordinates.
     /// </summary>
-    /// <param name="fuelResponse">
-    /// The fuel price response containing station details to normalize.
-    /// </param>
-    internal static void NormalizeStationAddresses(FuelPriceData fuelResponse)
-    {
-        foreach (FuelPriceDetail detail in fuelResponse.FuelPriceDetails)
-        {
-            FuelStation station = detail.FuelStation;
-            string address = station.Address ?? string.Empty;
-
-            if (string.IsNullOrWhiteSpace(station.Postcode))
-            {
-                station.Postcode = Regex.Match(address.TrimEnd(), @"\d{4}$").Value;
-            }
-
-            if (string.IsNullOrWhiteSpace(station.Suburb))
-            {
-                string addressBeforePostcode = address;
-                if (!string.IsNullOrWhiteSpace(station.Postcode))
-                {
-                    int postcodeIndex = addressBeforePostcode.LastIndexOf(station.Postcode, StringComparison.OrdinalIgnoreCase);
-                    if (postcodeIndex >= 0)
-                    {
-                        addressBeforePostcode = addressBeforePostcode[..postcodeIndex];
-                    }
-                }
-
-                addressBeforePostcode = Regex.Replace(
-                    addressBeforePostcode,
-                    @"\b(?:VIC|Victoria)\b\s*$",
-                    string.Empty,
-                    RegexOptions.IgnoreCase).Trim(' ', ',', '-');
-
-                string[] addressParts = addressBeforePostcode.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                if (addressParts.Length > 1)
-                {
-                    station.Suburb = addressParts[^1].ToUpper();
-                }
-            }
-        }
-    }
-
-    /// <summary>
-    /// Filters the fuel stations to return the nearest stations to the specified coordinates.
-    /// </summary>
-    /// <param name="fuelResponse">The fuel price data containing fuel station details.</param>
+    /// <param name="fuelPriceData">The fuel price data.</param>
     /// <param name="latitude">The latitude of the reference location.</param>
     /// <param name="longitude">The longitude of the reference location.</param>
     /// <param name="limitTo">The maximum number of nearest stations to return.</param>
     /// <returns>A new <see cref="FuelPriceData"/> instance containing the nearest stations.</returns>
-    internal static FuelPriceData FilterNearestServos(FuelPriceData fuelResponse, double latitude, double longitude, int limitTo = 3)
+    internal static FuelPriceData FindNearestServos(FuelPriceData fuelPriceData, double latitude, double longitude, int limitTo = 10)
     {
-        var closestDetails = fuelResponse.FuelPriceDetails
+        var filteredData = fuelPriceData.FuelPriceDetails
             .Where(detail => detail.FuelStation is not null)
             .Select(detail => new
             {
@@ -78,7 +32,7 @@ internal class ServoUtils
 
         return new FuelPriceData
         {
-            FuelPriceDetails = closestDetails
+            FuelPriceDetails = filteredData
         };
     }
 

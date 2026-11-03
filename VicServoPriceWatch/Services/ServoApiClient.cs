@@ -56,7 +56,7 @@ internal class ServoApiClient
         }
 
         // Normalize before caching so cached responses are ready for all consumers.
-        ServoUtils.NormalizeStationAddresses(result);
+        result.PopulatePostcodesAndSuburbs();
         await WriteCacheAsync(result);
 
         return result;
@@ -81,7 +81,7 @@ internal class ServoApiClient
             if (cachedResult is not null)
             {
                 // This also supports cache files created before address normalization was added.
-                ServoUtils.NormalizeStationAddresses(cachedResult);
+                cachedResult.PopulatePostcodesAndSuburbs();
             }
 
             return cachedResult;

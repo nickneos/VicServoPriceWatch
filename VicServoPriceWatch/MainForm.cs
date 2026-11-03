@@ -352,7 +352,7 @@ internal sealed class MainForm : Form
 
             statusLabel.Text = "Loading current prices...";
             FuelPriceData response = await ServoApiClient.GetFuelPricesAsync(Locals.ApiKey);
-            FuelPriceData nearestStations = ServoUtils.FilterNearestServos(
+            FuelPriceData nearestStations = ServoLocator.FindNearestServos(
                 response,
                 location.Latitude,
                 location.Longitude,
