@@ -31,6 +31,12 @@ public sealed class FuelStation
     [JsonPropertyName("address")]
     public string Address { get; set; } = string.Empty;
 
+    [JsonPropertyName("suburb")]
+    public string? Suburb { get; set; }
+
+    [JsonPropertyName("postcode")]
+    public string? Postcode { get; set; }
+
     [JsonPropertyName("brandId")]
     public string BrandId { get; set; } = string.Empty;
 
