@@ -8,6 +8,36 @@ namespace VicServoPriceWatch;
 /// </summary>
 internal sealed class MainForm : Form
 {
+    private static readonly string[] fuelTypeDisplayOrder =
+    [
+        "U91",
+        "U95",
+        "U98",
+        "Diesel",
+        "Premium Diesel",
+        "E10",
+        "E85",
+        "Biodiesel 20",
+        "LPG",
+        "LNG",
+        "CNG"
+    ];
+
+    private static readonly Dictionary<string, string> fuelTypeDisplayNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["U91"] = "U91",
+        ["P95"] = "U95",
+        ["P98"] = "U98",
+        ["DSL"] = "Diesel",
+        ["PDSL"] = "Premium Diesel",
+        ["E10"] = "E10",
+        ["E85"] = "E85",
+        ["B20"] = "Biodiesel 20",
+        ["LPG"] = "LPG",
+        ["LNG"] = "LNG",
+        ["CNG"] = "CNG"
+    };
+
     // Input controls for the nearest-station search.
     private readonly TextBox addressTextBox = new();
     private readonly NumericUpDown stationCountInput = new();
@@ -20,7 +50,11 @@ internal sealed class MainForm : Form
 
     // Actions for loading station-price data.
     private readonly Button searchButton = new();
+    private readonly Button currentLocationButton = new();
     private readonly Button refreshButton = new();
+#if DEBUG
+    private readonly Button testLocationButton = new();
+#endif
 
     // Status and results controls.
     private readonly Label statusLabel = new();
@@ -36,11 +70,16 @@ internal sealed class MainForm : Form
     private string? sortColumnName;
     private bool sortAscending = true;
 
+    // Preferences loaded from and saved to the local application data directory.
+    private readonly UserPreferences userPreferences;
+
     /// <summary>
     /// Initializes the main window and configures its controls and layout.
     /// </summary>
     public MainForm()
     {
+        userPreferences = UserPreferencesService.Load();
+
         Text = "Vic Servo Price Watch";
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(900, 500);
@@ -53,7 +92,7 @@ internal sealed class MainForm : Form
 
         stationCountInput.Minimum = 1;
         stationCountInput.Maximum = 100;
-        stationCountInput.Value = 3;
+        stationCountInput.Value = 10;
         stationCountInput.Width = 60;
 
         // Configure filters and refresh the grid whenever a filter changes.
@@ -63,20 +102,58 @@ internal sealed class MainForm : Form
 
         suburbFilter.PlaceholderText = "Suburb";
         suburbFilter.Width = 130;
+        suburbFilter.Text = userPreferences.Suburb;
         suburbFilter.TextChanged += (_, _) => ApplyFiltersAndSort();
 
         postcodeFilter.PlaceholderText = "Postcode";
         postcodeFilter.Width = 80;
+        postcodeFilter.Text = userPreferences.Postcode;
         postcodeFilter.TextChanged += (_, _) => ApplyFiltersAndSort();
 
         clearFiltersButton.Text = "Clear filters";
         clearFiltersButton.AutoSize = true;
         clearFiltersButton.Click += (_, _) => ClearFilters();
 
+        sortColumnName = userPreferences.SortColumnName;
+        sortAscending = userPreferences.SortAscending;
+
         // Configure commands that load or search for price data.
         searchButton.Text = "Find nearest";
         searchButton.AutoSize = true;
-        searchButton.Click += async (_, _) => await FindNearestPricesAsync();
+        searchButton.Click += async (_, _) => await FindNearestPricesAsync(useCurrentLocation: false);
+
+        currentLocationButton.Text = "Use current location";
+        currentLocationButton.AutoSize = true;
+        currentLocationButton.Click += async (_, _) => await FindNearestPricesAsync(useCurrentLocation: true);
+
+#if DEBUG
+        testLocationButton.Text = "Test location";
+        testLocationButton.AutoSize = true;
+        testLocationButton.Click += async (_, _) =>
+        {
+            try
+            {
+                (double latitude, double longitude) =
+                    await WindowsLocationService.GetCurrentLocationAsync();
+
+                MessageBox.Show(
+                    this,
+                    $"Latitude: {latitude}\nLongitude: {longitude}",
+                    "Location test",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception exception)
+            {
+                MessageBox.Show(
+                    this,
+                    exception.Message,
+                    "Location test failed",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        };
+#endif
 
         refreshButton.Text = "Show all prices";
         refreshButton.AutoSize = true;
@@ -168,6 +245,10 @@ internal sealed class MainForm : Form
         toolbar.Controls.Add(new Label { Text = "Stations:", AutoSize = true, Padding = new Padding(12, 7, 4, 0) });
         toolbar.Controls.Add(stationCountInput);
         toolbar.Controls.Add(searchButton);
+        toolbar.Controls.Add(currentLocationButton);
+#if DEBUG
+        toolbar.Controls.Add(testLocationButton);
+#endif
         toolbar.Controls.Add(refreshButton);
         toolbar.Controls.Add(statusLabel);
 
@@ -199,6 +280,7 @@ internal sealed class MainForm : Form
 
         Controls.Add(layout);
         Shown += (_, _) => addressTextBox.Focus();
+        FormClosing += (_, _) => SaveUserPreferences();
     }
 
     /// <summary>
@@ -225,17 +307,18 @@ internal sealed class MainForm : Form
     }
 
     /// <summary>
-    /// Geocodes the entered address, finds the requested number of nearest stations,
-    /// and displays their prices.
+    /// Gets the search coordinates from the address or current Windows location,
+    /// finds the requested number of nearest stations, and displays their prices.
     /// </summary>
-    private async Task FindNearestPricesAsync()
+    /// <param name="useCurrentLocation">Whether to use the current Windows location instead of geocoding the address.</param>
+    private async Task FindNearestPricesAsync(bool useCurrentLocation)
     {
         string address = addressTextBox.Text.Trim();
         int stationCount = (int)stationCountInput.Value;
 
-        if (string.IsNullOrWhiteSpace(address))
+        if (!useCurrentLocation && string.IsNullOrWhiteSpace(address))
         {
-            MessageBox.Show(this, "Enter an address to search from.", "Address required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "Enter an address or use your current location.", "Location required", MessageBoxButtons.OK, MessageBoxIcon.Information);
             addressTextBox.Focus();
             return;
         }
@@ -244,12 +327,27 @@ internal sealed class MainForm : Form
 
         try
         {
-            statusLabel.Text = "Finding address...";
-            (double Latitude, double Longitude)? coordinates = await NominatimGeocoder.GeocodeAddressAsync(address);
+            (double Latitude, double Longitude) location;
+            string locationDescription;
 
-            if (coordinates is not { } location)
+            if (useCurrentLocation)
             {
-                throw new InvalidOperationException("The address could not be located. Try a more specific address.");
+                statusLabel.Text = "Getting current location...";
+                location = await WindowsLocationService.GetCurrentLocationAsync();
+                locationDescription = "your current location";
+            }
+            else
+            {
+                statusLabel.Text = "Finding address...";
+                (double Latitude, double Longitude)? coordinates = await NominatimGeocoder.GeocodeAddressAsync(address);
+
+                if (coordinates is not { } addressLocation)
+                {
+                    throw new InvalidOperationException("The address could not be located. Try a more specific address.");
+                }
+
+                location = addressLocation;
+                locationDescription = address;
             }
 
             statusLabel.Text = "Loading current prices...";
@@ -260,7 +358,7 @@ internal sealed class MainForm : Form
                 location.Longitude,
                 stationCount);
 
-            DisplayPrices(nearestStations, $"Showing {nearestStations.FuelPriceDetails.Count:N0} nearest stations to {address}. Last refreshed {DateTime.Now:HH:mm:ss}.");
+            DisplayPrices(nearestStations, $"Showing {nearestStations.FuelPriceDetails.Count:N0} nearest stations to {locationDescription}. Last refreshed {DateTime.Now:HH:mm:ss}.");
         }
         catch (Exception exception)
         {
@@ -302,16 +400,23 @@ internal sealed class MainForm : Form
     /// </summary>
     private void PopulateFuelTypeFilter()
     {
-        string selectedFuelType = fuelTypeFilter.SelectedItem?.ToString() ?? "All fuel types";
+        string selectedFuelType = fuelTypeFilter.SelectedItem?.ToString()
+            ?? GetFuelTypeDisplayName(userPreferences.FuelType);
 
         fuelTypeFilter.BeginUpdate();
         fuelTypeFilter.Items.Clear();
         fuelTypeFilter.Items.Add("All fuel types");
 
+        foreach (string fuelType in fuelTypeDisplayOrder)
+        {
+            fuelTypeFilter.Items.Add(fuelType);
+        }
+
         foreach (string fuelType in loadedRows
             .Select(row => row.FuelType)
             .Where(fuelType => !string.IsNullOrWhiteSpace(fuelType) && fuelType != "No price reported")
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .Where(fuelType => !fuelTypeDisplayOrder.Contains(fuelType, StringComparer.CurrentCultureIgnoreCase))
             .OrderBy(fuelType => fuelType, StringComparer.CurrentCultureIgnoreCase))
         {
             fuelTypeFilter.Items.Add(fuelType);
@@ -361,6 +466,7 @@ internal sealed class MainForm : Form
         pricesGrid.DataSource = rows;
         statusLabel.Text = $"{statusPrefix} Showing {rows.Count:N0} of {loadedRows.Count:N0} prices.";
         UpdateSortGlyphs();
+        SaveUserPreferences();
     }
 
     /// <summary>
@@ -399,6 +505,19 @@ internal sealed class MainForm : Form
     }
 
     /// <summary>
+    /// Captures the current filter and sort state and persists it locally.
+    /// </summary>
+    private void SaveUserPreferences()
+    {
+        userPreferences.FuelType = fuelTypeFilter.SelectedItem?.ToString() ?? userPreferences.FuelType;
+        userPreferences.Suburb = suburbFilter.Text.Trim();
+        userPreferences.Postcode = postcodeFilter.Text.Trim();
+        userPreferences.SortColumnName = sortColumnName;
+        userPreferences.SortAscending = sortAscending;
+        UserPreferencesService.Save(userPreferences);
+    }
+
+    /// <summary>
     /// Resets all filters to their default values.
     /// </summary>
     private void ClearFilters()
@@ -424,6 +543,10 @@ internal sealed class MainForm : Form
         postcodeFilter.Enabled = !isBusy;
         clearFiltersButton.Enabled = !isBusy;
         searchButton.Enabled = !isBusy;
+        currentLocationButton.Enabled = !isBusy;
+#if DEBUG
+        testLocationButton.Enabled = !isBusy;
+#endif
         refreshButton.Enabled = !isBusy;
         Cursor = isBusy ? Cursors.WaitCursor : Cursors.Default;
     }
@@ -453,12 +576,24 @@ internal sealed class MainForm : Form
             Address = detail.FuelStation.Address,
             Suburb = detail.FuelStation.Suburb ?? string.Empty,
             Postcode = detail.FuelStation.Postcode ?? string.Empty,
-            FuelType = price?.FuelType ?? "No price reported",
+            FuelType = price is null ? "No price reported" : GetFuelTypeDisplayName(price.FuelType),
             PriceValue = price?.Price,
-            Price = price?.Price is decimal value ? $"${value:F3}" : "Unavailable",
+            Price = price?.Price is decimal value ? $"{value:F1}" : "Unavailable",
             UpdatedAtValue = price?.UpdatedAt ?? detail.UpdatedAt,
             UpdatedAt = price?.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
         };
+    }
+
+    /// <summary>
+    /// Converts an API fuel-type code to the name shown in the user interface.
+    /// </summary>
+    /// <param name="fuelType">The API fuel-type code or display name.</param>
+    /// <returns>The user-facing fuel-type name.</returns>
+    private static string GetFuelTypeDisplayName(string fuelType)
+    {
+        return fuelTypeDisplayNames.TryGetValue(fuelType, out string? displayName)
+            ? displayName
+            : fuelType;
     }
 
     /// <summary>

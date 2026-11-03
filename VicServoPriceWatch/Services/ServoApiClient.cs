@@ -15,8 +15,8 @@ internal class ServoApiClient
 
     // Cached responses are reused until they exceed this age.
     private static readonly TimeSpan cacheLifetime = TimeSpan.FromMinutes(15);
-    private static readonly string cacheDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VicServoPriceWatch");
-    private static readonly string cacheFilePath = Path.Combine(cacheDirectory, "fuel-prices.json");
+    private static readonly string cacheDirectory = AppDataPaths.DirectoryPath;
+    private static readonly string cacheFilePath = AppDataPaths.FuelPricesCacheFilePath;
     private static readonly JsonSerializerOptions cacheSerializerOptions = new()
     {
         WriteIndented = true
