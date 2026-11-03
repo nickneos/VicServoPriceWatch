@@ -2,3 +2,63 @@
 **/bin/
 **/obj/
 /.vs
+
+# Visual Studio user settings and cache
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# .NET and NuGet artifacts
+project.assets.json
+project.nuget.cache
+*.nupkg
+*.snupkg
+.nuget/
+packages/
+
+# Visual Studio generated files
+*.VC.db
+*.VC.VC.opendb
+*.aps
+*.ncb
+*.opendb
+*.pdb
+*.ilk
+*.idb
+*.ipch
+*.tlog
+*.lastbuildstate
+
+# Test results and code coverage
+TestResults/
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+coverage/
+coverage*.json
+
+# Code analysis and IDE tooling
+.vsconfig
+_ReSharper*/
+*.DotSettings.user
+.idea/
+*.sln.iml
+.vscode/
+
+# Publish and deployment output
+publish/
+PublishOutput/
+*.pubxml.user
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*~
