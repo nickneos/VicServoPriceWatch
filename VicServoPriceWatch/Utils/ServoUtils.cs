@@ -20,7 +20,7 @@ internal class ServoUtils
 
             if (string.IsNullOrWhiteSpace(station.Postcode))
             {
-                station.Postcode = Regex.Match(address, @"\b\d{4}\b").Value;
+                station.Postcode = Regex.Match(address.TrimEnd(), @"\d{4}$").Value;
             }
 
             if (string.IsNullOrWhiteSpace(station.Suburb))
@@ -44,7 +44,7 @@ internal class ServoUtils
                 string[] addressParts = addressBeforePostcode.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
                 if (addressParts.Length > 1)
                 {
-                    station.Suburb = addressParts[^1];
+                    station.Suburb = addressParts[^1].ToUpper();
                 }
             }
         }

@@ -6,7 +6,7 @@ namespace VicServoPriceWatch;
 /// <summary>
 /// Retrieves fuel-price data from the Victorian fuel-price API and manages the local response cache.
 /// </summary>
-internal class ServoApi
+internal class ServoApiClient
 {
     // A shared client avoids creating a new connection for every request.
     private static readonly HttpClient client = new();
@@ -27,7 +27,7 @@ internal class ServoApi
     /// </summary>
     /// <param name="apiKey">The API consumer key used to authenticate the request.</param>
     /// <returns>The normalized fuel-price response.</returns>
-    internal static async Task<FuelPriceData> GetWebResource(string apiKey)
+    internal static async Task<FuelPriceData> GetFuelPricesAsync(string apiKey)
     {
         FuelPriceData? cachedResult = await TryReadFreshCacheAsync();
         if (cachedResult is not null)

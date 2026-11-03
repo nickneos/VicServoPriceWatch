@@ -1,5 +1,4 @@
 using System.Drawing;
-using Geocoder;
 
 namespace VicServoPriceWatch;
 
@@ -212,7 +211,7 @@ internal sealed class MainForm : Form
 
         try
         {
-            FuelPriceData response = await ServoApi.GetWebResource(Locals.ApiKey);
+            FuelPriceData response = await ServoApiClient.GetFuelPricesAsync(Locals.ApiKey);
             DisplayPrices(response, $"Showing all prices from {response.FuelPriceDetails.Count:N0} stations. Last refreshed {DateTime.Now:HH:mm:ss}.");
         }
         catch (Exception exception)
@@ -246,7 +245,7 @@ internal sealed class MainForm : Form
         try
         {
             statusLabel.Text = "Finding address...";
-            (double Latitude, double Longitude)? coordinates = await NominatimApi.GeocodeAddressAsync(address);
+            (double Latitude, double Longitude)? coordinates = await NominatimGeocoder.GeocodeAddressAsync(address);
 
             if (coordinates is not { } location)
             {
@@ -254,7 +253,7 @@ internal sealed class MainForm : Form
             }
 
             statusLabel.Text = "Loading current prices...";
-            FuelPriceData response = await ServoApi.GetWebResource(Locals.ApiKey);
+            FuelPriceData response = await ServoApiClient.GetFuelPricesAsync(Locals.ApiKey);
             FuelPriceData nearestStations = ServoUtils.FilterNearestServos(
                 response,
                 location.Latitude,

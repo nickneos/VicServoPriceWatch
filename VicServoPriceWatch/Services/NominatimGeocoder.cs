@@ -2,9 +2,9 @@
 using System.Text.Json.Serialization;
 using System.Web;
 
-namespace Geocoder;
+namespace VicServoPriceWatch;
 
-public static class NominatimApi
+public static class NominatimGeocoder
 {
     private static readonly HttpClient client = new HttpClient();
     private static readonly string baseUrl = "https://nominatim.openstreetmap.org/search";
