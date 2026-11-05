@@ -50,11 +50,7 @@ internal sealed class MainForm : Form
 
     // Actions for loading station-price data.
     private readonly Button searchButton = new();
-    private readonly Button currentLocationButton = new();
     private readonly Button refreshButton = new();
-#if DEBUG
-    private readonly Button testLocationButton = new();
-#endif
 
     // Status and results controls.
     private readonly Label statusLabel = new();
@@ -93,11 +89,11 @@ internal sealed class MainForm : Form
         stationCountInput.Minimum = 1;
         stationCountInput.Maximum = 100;
         stationCountInput.Value = 10;
-        stationCountInput.Width = 60;
+        stationCountInput.Width = 40;
 
         // Configure filters and refresh the grid whenever a filter changes.
         fuelTypeFilter.DropDownStyle = ComboBoxStyle.DropDownList;
-        fuelTypeFilter.Width = 130;
+        fuelTypeFilter.Width = 100;
         fuelTypeFilter.SelectedIndexChanged += (_, _) => ApplyFiltersAndSort();
 
         suburbFilter.PlaceholderText = "Suburb";
@@ -120,49 +116,17 @@ internal sealed class MainForm : Form
         // Configure commands that load or search for price data.
         searchButton.Text = "Find nearest";
         searchButton.AutoSize = true;
-        searchButton.Click += async (_, _) => await FindNearestPricesAsync(useCurrentLocation: false);
+        searchButton.Click += async (_, _) => await FindNearestPricesAsync();
 
-        currentLocationButton.Text = "Use current location";
-        currentLocationButton.AutoSize = true;
-        currentLocationButton.Click += async (_, _) => await FindNearestPricesAsync(useCurrentLocation: true);
-
-#if DEBUG
-        testLocationButton.Text = "Test location";
-        testLocationButton.AutoSize = true;
-        testLocationButton.Click += async (_, _) =>
-        {
-            try
-            {
-                (double latitude, double longitude) =
-                    await WindowsLocationService.GetCurrentLocationAsync();
-
-                MessageBox.Show(
-                    this,
-                    $"Latitude: {latitude}\nLongitude: {longitude}",
-                    "Location test",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
-            }
-            catch (Exception exception)
-            {
-                MessageBox.Show(
-                    this,
-                    exception.Message,
-                    "Location test failed",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
-            }
-        };
-#endif
-
-        refreshButton.Text = "Show all prices";
+        refreshButton.Text = "Show all servos";
         refreshButton.AutoSize = true;
         refreshButton.Click += async (_, _) => await LoadAllPricesAsync();
 
         // Configure the status display.
         statusLabel.Text = "Ready";
-        statusLabel.AutoSize = true;
-        statusLabel.Padding = new Padding(12, 7, 0, 0);
+        statusLabel.Dock = DockStyle.Fill;
+        statusLabel.TextAlign = ContentAlignment.MiddleRight;
+        statusLabel.Padding = new Padding(0, 7, 0, 0);
 
         // Configure the read-only results grid.
         pricesGrid.Dock = DockStyle.Fill;
@@ -181,7 +145,7 @@ internal sealed class MainForm : Form
         {
             Name = nameof(PriceRow.Station),
             DataPropertyName = nameof(PriceRow.Station),
-            HeaderText = "Station",
+            HeaderText = "Servo",
             FillWeight = 18,
             SortMode = DataGridViewColumnSortMode.Programmatic
         });
@@ -234,23 +198,36 @@ internal sealed class MainForm : Form
             SortMode = DataGridViewColumnSortMode.Programmatic
         });
 
-        FlowLayoutPanel toolbar = new()
+        FlowLayoutPanel addressToolbar = new()
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
             Padding = new Padding(8)
         };
-        toolbar.Controls.Add(new Label { Text = "Address:", AutoSize = true, Padding = new Padding(0, 7, 4, 0) });
-        toolbar.Controls.Add(addressTextBox);
-        toolbar.Controls.Add(new Label { Text = "Stations:", AutoSize = true, Padding = new Padding(12, 7, 4, 0) });
-        toolbar.Controls.Add(stationCountInput);
-        toolbar.Controls.Add(searchButton);
-        toolbar.Controls.Add(currentLocationButton);
-#if DEBUG
-        toolbar.Controls.Add(testLocationButton);
-#endif
-        toolbar.Controls.Add(refreshButton);
-        toolbar.Controls.Add(statusLabel);
+        addressToolbar.Controls.Add(new Label { Text = "Address", AutoSize = true, Padding = new Padding(0, 7, 4, 0) });
+        addressToolbar.Controls.Add(addressTextBox);
+        addressToolbar.Controls.Add(searchButton);
+        addressToolbar.Controls.Add(stationCountInput);
+        addressToolbar.Controls.Add(new Label { Text = "Servos", AutoSize = true, Padding = new Padding(0, 7, 12, 0) });
+
+        FlowLayoutPanel searchToolbar = new()
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            Padding = new Padding(8, 0, 8, 8)
+        };
+
+        TableLayoutPanel toolbar = new()
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 1,
+            RowCount = 2
+        };
+        toolbar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        toolbar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        toolbar.Controls.Add(addressToolbar, 0, 0);
+        toolbar.Controls.Add(searchToolbar, 0, 1);
 
         FlowLayoutPanel filterToolbar = new()
         {
@@ -258,7 +235,7 @@ internal sealed class MainForm : Form
             AutoSize = true,
             Padding = new Padding(8, 0, 8, 8)
         };
-        filterToolbar.Controls.Add(new Label { Text = "Fuel type:", AutoSize = true, Padding = new Padding(0, 5, 4, 0) });
+        filterToolbar.Controls.Add(refreshButton);
         filterToolbar.Controls.Add(fuelTypeFilter);
         filterToolbar.Controls.Add(suburbFilter);
         filterToolbar.Controls.Add(postcodeFilter);
@@ -268,18 +245,24 @@ internal sealed class MainForm : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 3,
+            RowCount = 4,
             Padding = new Padding(8)
         };
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.Controls.Add(toolbar, 0, 0);
         layout.Controls.Add(filterToolbar, 0, 1);
         layout.Controls.Add(pricesGrid, 0, 2);
+        layout.Controls.Add(statusLabel, 0, 3);
 
         Controls.Add(layout);
-        Shown += (_, _) => addressTextBox.Focus();
+        Shown += async (_, _) =>
+        {
+            addressTextBox.Focus();
+            await LoadAllPricesAsync();
+        };
         FormClosing += (_, _) => SaveUserPreferences();
     }
 
@@ -294,7 +277,7 @@ internal sealed class MainForm : Form
         try
         {
             FuelPriceData response = await ServoApiClient.GetFuelPricesAsync(Locals.ApiKey);
-            DisplayPrices(response, $"Showing all prices from {response.FuelPriceDetails.Count:N0} stations. Last refreshed {DateTime.Now:HH:mm:ss}.");
+            DisplayPrices(response, $"Showing all prices from {response.FuelPriceDetails.Count:N0} servos. Last refreshed {DateTime.Now:HH:mm:ss}.");
         }
         catch (Exception exception)
         {
@@ -308,19 +291,18 @@ internal sealed class MainForm : Form
 
     /// <summary>
     /// Gets the search coordinates from the address or current Windows location,
-    /// finds the requested number of nearest stations, and displays their prices.
+    /// finds the requested number of nearest servos, and displays their prices.
     /// </summary>
-    /// <param name="useCurrentLocation">Whether to use the current Windows location instead of geocoding the address.</param>
-    private async Task FindNearestPricesAsync(bool useCurrentLocation)
+    private async Task FindNearestPricesAsync()
     {
         string address = addressTextBox.Text.Trim();
         int stationCount = (int)stationCountInput.Value;
+        bool useCurrentLocation = string.IsNullOrWhiteSpace(address);
 
-        if (!useCurrentLocation && string.IsNullOrWhiteSpace(address))
+        if (useCurrentLocation)
         {
-            MessageBox.Show(this, "Enter an address or use your current location.", "Location required", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "No address entered. Will use your current location.", "Location required", MessageBoxButtons.OK, MessageBoxIcon.Information);
             addressTextBox.Focus();
-            return;
         }
 
         SetBusy(true);
@@ -332,22 +314,34 @@ internal sealed class MainForm : Form
 
             if (useCurrentLocation)
             {
+                // No address was provided, so use the current Windows location instead.
                 statusLabel.Text = "Getting current location...";
                 location = await WindowsLocationService.GetCurrentLocationAsync();
-                locationDescription = "your current location";
+                locationDescription = $"{location.Latitude}, {location.Longitude}";
+                addressTextBox.Text = locationDescription;
             }
             else
             {
                 statusLabel.Text = "Finding address...";
-                (double Latitude, double Longitude)? coordinates = await NominatimGeocoder.GeocodeAddressAsync(address);
-
-                if (coordinates is not { } addressLocation)
+                
+                if (isGpsCoordinates(address))
                 {
-                    throw new InvalidOperationException("The address could not be located. Try a more specific address.");
+                    // Use the provided coordinates directly without geocoding.
+                    string[] parts = address.Replace(" ", "").Split(',');
+                    location = (double.Parse(parts[0].Trim()), double.Parse(parts[1].Trim()));
+                    locationDescription = address;
                 }
-
-                location = addressLocation;
-                locationDescription = address;
+                else
+                {
+                    // Use the Nominatim geocoder to convert the address into coordinates.
+                    (double Latitude, double Longitude)? coordinates = await NominatimGeocoder.GeocodeAddressAsync(address);
+                    if (coordinates is not { } addressLocation)
+                    {
+                        throw new InvalidOperationException("The address could not be located. Try a more specific address.");
+                    }
+                    location = addressLocation;
+                    locationDescription = address;
+                }
             }
 
             statusLabel.Text = "Loading current prices...";
@@ -358,7 +352,7 @@ internal sealed class MainForm : Form
                 location.Longitude,
                 stationCount);
 
-            DisplayPrices(nearestStations, $"Showing {nearestStations.FuelPriceDetails.Count:N0} nearest stations to {locationDescription}. Last refreshed {DateTime.Now:HH:mm:ss}.");
+            DisplayPrices(nearestStations, $"Showing {nearestStations.FuelPriceDetails.Count:N0} nearest servos to {locationDescription}. Last refreshed {DateTime.Now:HH:mm:ss}.");
         }
         catch (Exception exception)
         {
@@ -387,7 +381,9 @@ internal sealed class MainForm : Form
                 continue;
             }
 
-            loadedRows.AddRange(detail.FuelPrices.Select(price => CreatePriceRow(detail, price)));
+            loadedRows.AddRange(detail.FuelPrices
+                .Select(fuelprice => CreatePriceRow(detail, fuelprice))
+                .Where(pricerow => !pricerow.Price.Equals("unavailable", StringComparison.CurrentCultureIgnoreCase)));
         }
 
         PopulateFuelTypeFilter();
@@ -543,10 +539,6 @@ internal sealed class MainForm : Form
         postcodeFilter.Enabled = !isBusy;
         clearFiltersButton.Enabled = !isBusy;
         searchButton.Enabled = !isBusy;
-        currentLocationButton.Enabled = !isBusy;
-#if DEBUG
-        testLocationButton.Enabled = !isBusy;
-#endif
         refreshButton.Enabled = !isBusy;
         Cursor = isBusy ? Cursors.WaitCursor : Cursors.Default;
     }
@@ -594,6 +586,19 @@ internal sealed class MainForm : Form
         return fuelTypeDisplayNames.TryGetValue(fuelType, out string? displayName)
             ? displayName
             : fuelType;
+    }
+
+    private static bool isGpsCoordinates(string input)
+    {
+        string[] parts = input.Replace(" ", "").Split(',');
+        if (parts.Length != 2)
+        {
+            return false;
+        }
+        return double.TryParse(parts[0].Trim(), out double latitude) &&
+               double.TryParse(parts[1].Trim(), out double longitude) &&
+               latitude >= -90 && latitude <= 90 &&
+               longitude >= -180 && longitude <= 180;
     }
 
     /// <summary>
