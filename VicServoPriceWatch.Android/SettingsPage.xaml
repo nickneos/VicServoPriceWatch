@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="VicServoPriceWatch.Android.SettingsPage"
+             Title="Settings">
+
+    <ScrollView>
+        <VerticalStackLayout
+            Padding="30"
+            Spacing="16">
+            <Label
+                Text="API settings"
+                Style="{StaticResource Headline}"
+                SemanticProperties.HeadingLevel="Level1" />
+
+            <Label
+                Text="Enter the API key used to retrieve Victorian fuel prices. It is stored securely on this device."
+                SemanticProperties.Description="Information about secure API key storage" />
+
+            <Entry
+                x:Name="ApiKeyEntry"
+                Placeholder="API key"
+                IsPassword="True"
+                ClearButtonVisibility="WhileEditing"
+                Keyboard="Text"
+                ReturnType="Done"
+                SemanticProperties.Hint="Enter the fuel price API key" />
+
+            <Button
+                x:Name="SaveButton"
+                Text="Save API key"
+                Clicked="OnSaveApiKeyClicked"
+                HorizontalOptions="Fill" />
+
+            <Button
+                x:Name="ClearButton"
+                Text="Clear saved API key"
+                Clicked="OnClearApiKeyClicked"
+                HorizontalOptions="Fill" />
+
+            <Label
+                x:Name="StatusLabel"
+                Text="" />
+        </VerticalStackLayout>
+    </ScrollView>
+
+</ContentPage>
