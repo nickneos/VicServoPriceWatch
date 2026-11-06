@@ -30,6 +30,18 @@
                 SemanticProperties.Hint="Requests permission and gets the current device location"
                 Clicked="OnGetLocationClicked"
                 HorizontalOptions="Fill" />
+
+            <Button
+                x:Name="FindServosButton"
+                Text="Find nearby servos"
+                SemanticProperties.Hint="Gets fuel prices for the nearest service stations"
+                Clicked="OnFindServosClicked"
+                HorizontalOptions="Fill" />
+
+            <Label
+                x:Name="ResultsLabel"
+                Text="Nearby servo results will appear here."
+                SemanticProperties.HeadingLevel="Level2" />
         </VerticalStackLayout>
     </ScrollView>
 
