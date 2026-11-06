@@ -1,8 +1,9 @@
 ﻿using System.Text.RegularExpressions;
+using VicServoPriceWatch.Core.Models;
 
-namespace VicServoPriceWatch;
+namespace VicServoPriceWatch.Core.Utils;
 
-internal class ServoLocator
+public class ServoLocator
 {
     /// <summary>
     /// Finds the nearest service stations to the specified coordinates.
@@ -12,7 +13,7 @@ internal class ServoLocator
     /// <param name="longitude">The longitude of the reference location.</param>
     /// <param name="limitTo">The maximum number of nearest stations to return.</param>
     /// <returns>A new <see cref="FuelPriceData"/> instance containing the nearest stations.</returns>
-    internal static FuelPriceData FindNearestServos(FuelPriceData fuelPriceData, double latitude, double longitude, int limitTo = 10)
+    public static FuelPriceData FindNearestServos(FuelPriceData fuelPriceData, double latitude, double longitude, int limitTo = 10)
     {
         var filteredData = fuelPriceData.FuelPriceDetails
             .Where(detail => detail.FuelStation is not null)

@@ -1,9 +1,9 @@
-namespace VicServoPriceWatch;
+namespace VicServoPriceWatch.Core.Models;
 
 /// <summary>
 /// Represents user interface preferences persisted between application sessions.
 /// </summary>
-internal sealed class UserPreferences
+public sealed class UserPreferences
 {
     /// <summary>
     /// Gets or sets the selected fuel type filter.

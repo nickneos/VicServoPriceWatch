@@ -2,7 +2,7 @@
 using System.Text.Json.Serialization;
 using System.Web;
 
-namespace VicServoPriceWatch;
+namespace VicServoPriceWatch.Core.Services;
 
 public static class NominatimGeocoder
 {

@@ -1,7 +1,7 @@
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
-namespace VicServoPriceWatch;
+namespace VicServoPriceWatch.Core.Models;
 
 /// <summary>
 /// Represents the collection of fuel-price details returned by the API.

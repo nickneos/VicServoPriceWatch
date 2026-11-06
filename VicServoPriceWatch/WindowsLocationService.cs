@@ -5,7 +5,7 @@ namespace VicServoPriceWatch;
 /// <summary>
 /// Provides the current Windows location for the application.
 /// </summary>
-internal static class WindowsLocationService
+public static class WindowsLocationService
 {
     /// <summary>
     /// Gets the current device location after requesting the user's permission.
@@ -14,7 +14,7 @@ internal static class WindowsLocationService
     /// <exception cref="InvalidOperationException">
     /// Thrown when location access is denied or a location cannot be obtained.
     /// </exception>
-    internal static async Task<(double Latitude, double Longitude)> GetCurrentLocationAsync()
+    public static async Task<(double Latitude, double Longitude)> GetCurrentLocationAsync()
     {
         GeolocationAccessStatus accessStatus = await Geolocator.RequestAccessAsync();
 

@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="VicServoPriceWatch.Core/VicServoPriceWatch.Core.csproj" Id="78917499-42d3-4f21-99f6-ba1bf43f1936" />
   <Project Path="VicServoPriceWatch/VicServoPriceWatch.csproj" />
 </Solution>

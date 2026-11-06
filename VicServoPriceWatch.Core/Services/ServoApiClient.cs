@@ -1,12 +1,14 @@
 ﻿using System.Net.Http.Json;
 using System.Text.Json;
+using VicServoPriceWatch.Core.Models;
+using VicServoPriceWatch.Core.Utils;
 
-namespace VicServoPriceWatch;
+namespace VicServoPriceWatch.Core.Services;
 
 /// <summary>
 /// Retrieves fuel-price data from the Victorian fuel-price API and manages the local response cache.
 /// </summary>
-internal class ServoApiClient
+public class ServoApiClient
 {
     // A shared client avoids creating a new connection for every request.
     private static readonly HttpClient client = new();
@@ -27,7 +29,7 @@ internal class ServoApiClient
     /// </summary>
     /// <param name="apiKey">The API consumer key used to authenticate the request.</param>
     /// <returns>The normalized fuel-price response.</returns>
-    internal static async Task<FuelPriceData> GetFuelPricesAsync(string apiKey)
+    public static async Task<FuelPriceData> GetFuelPricesAsync(string apiKey)
     {
         FuelPriceData? cachedResult = await TryReadFreshCacheAsync();
         if (cachedResult is not null)

@@ -1,4 +1,4 @@
-namespace VicServoPriceWatch;
+namespace VicServoPriceWatch.Core.Utils;
 
 /// <summary>
 /// Provides paths for application data stored in the user's local profile.

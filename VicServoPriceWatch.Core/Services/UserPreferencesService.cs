@@ -1,11 +1,13 @@
 using System.Text.Json;
+using VicServoPriceWatch.Core.Models;
+using VicServoPriceWatch.Core.Utils;
 
-namespace VicServoPriceWatch;
+namespace VicServoPriceWatch.Core.Services;
 
 /// <summary>
 /// Loads and saves user interface preferences in the local application data directory.
 /// </summary>
-internal static class UserPreferencesService
+public static class UserPreferencesService
 {
     private static readonly JsonSerializerOptions serializerOptions = new()
     {
@@ -16,7 +18,7 @@ internal static class UserPreferencesService
     /// Loads saved preferences or returns default preferences when they are unavailable.
     /// </summary>
     /// <returns>The saved preferences, or a new default preferences instance.</returns>
-    internal static UserPreferences Load()
+    public static UserPreferences Load()
     {
         try
         {
@@ -42,7 +44,7 @@ internal static class UserPreferencesService
     /// Saves preferences using a temporary file before replacing the existing file.
     /// </summary>
     /// <param name="preferences">The preferences to save.</param>
-    internal static void Save(UserPreferences preferences)
+    public static void Save(UserPreferences preferences)
     {
         string temporaryFilePath = Path.Combine(
             AppDataPaths.DirectoryPath,
