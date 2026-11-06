@@ -1,11 +1,28 @@
 # Build outputs
 bin/
 obj/
+artifacts/
 
 # User-specific files
 .vs/
 *.user
 *.suo
+*.csproj.user
+
+# Android local configuration
+local.properties
+
+# Android packages and signing files
+*.apk
+*.aab
+*.apks
+*.idsig
+*.keystore
+*.jks
+*.p12
+
+# Optional service configuration containing credentials
+google-services.json
 
 # OS-generated files
 .DS_Store
