@@ -13,16 +13,11 @@ internal sealed class MainForm : Form
     // Input controls for the nearest-station search.
     private readonly TextBox addressTextBox = new();
     private readonly NumericUpDown stationCountInput = new();
-
-    // Controls used to filter the displayed price data.
     private readonly ComboBox fuelTypeFilter = new();
-    private readonly TextBox suburbFilter = new();
-    private readonly TextBox postcodeFilter = new();
-    private readonly Button clearFiltersButton = new();
 
     // Actions for loading station-price data.
     private readonly Button searchButton = new();
-    private readonly Button refreshButton = new();
+    private readonly Button allServosButton = new();
 
     // Status and results controls.
     private readonly Label statusLabel = new();
@@ -38,8 +33,8 @@ internal sealed class MainForm : Form
     private string? sortColumnName;
     private bool sortAscending = true;
 
-    //
-    private bool isFilteredByLocation = false;
+    // Whether the currently displayed results are all servos or only the nearest servos to a location.
+    private bool isAllServos = true;
 
     // Preferences loaded from and saved to the local application data directory.
     private readonly UserPreferences userPreferences;
@@ -71,20 +66,6 @@ internal sealed class MainForm : Form
         fuelTypeFilter.Width = 100;
         fuelTypeFilter.SelectedIndexChanged += async (_, _) => await ApplyFuelTypeFilterAsync();
 
-        suburbFilter.PlaceholderText = "Suburb";
-        suburbFilter.Width = 130;
-        suburbFilter.Text = userPreferences.Suburb;
-        suburbFilter.TextChanged += (_, _) => ApplyFiltersAndSort();
-
-        postcodeFilter.PlaceholderText = "Postcode";
-        postcodeFilter.Width = 80;
-        postcodeFilter.Text = userPreferences.Postcode;
-        postcodeFilter.TextChanged += (_, _) => ApplyFiltersAndSort();
-
-        clearFiltersButton.Text = "Clear filters";
-        clearFiltersButton.AutoSize = true;
-        clearFiltersButton.Click += (_, _) => ClearFilters();
-
         sortColumnName = userPreferences.SortColumnName;
         sortAscending = userPreferences.SortAscending;
 
@@ -93,9 +74,9 @@ internal sealed class MainForm : Form
         searchButton.AutoSize = true;
         searchButton.Click += async (_, _) => await FindNearestPricesAsync();
 
-        refreshButton.Text = "Show all servos";
-        refreshButton.AutoSize = true;
-        refreshButton.Click += async (_, _) => await LoadAllPricesAsync();
+        allServosButton.Text = "Show all servos";
+        allServosButton.AutoSize = true;
+        allServosButton.Click += async (_, _) => await LoadAllServosAsync();
 
         // Configure the status display.
         statusLabel.Text = "Ready";
@@ -184,59 +165,39 @@ internal sealed class MainForm : Form
         addressToolbar.Controls.Add(searchButton);
         addressToolbar.Controls.Add(stationCountInput);
         addressToolbar.Controls.Add(new Label { Text = "Servos", AutoSize = true, Padding = new Padding(0, 7, 12, 0) });
-
-        FlowLayoutPanel searchToolbar = new()
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            Padding = new Padding(8, 0, 8, 8)
-        };
+        addressToolbar.Controls.Add(fuelTypeFilter);
+        addressToolbar.Controls.Add(allServosButton);
 
         TableLayoutPanel toolbar = new()
         {
             Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 1,
-            RowCount = 2
+            RowCount = 1
         };
-        toolbar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         toolbar.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         toolbar.Controls.Add(addressToolbar, 0, 0);
-        toolbar.Controls.Add(searchToolbar, 0, 1);
-
-        FlowLayoutPanel filterToolbar = new()
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            Padding = new Padding(8, 0, 8, 8)
-        };
-        filterToolbar.Controls.Add(refreshButton);
-        filterToolbar.Controls.Add(fuelTypeFilter);
-        filterToolbar.Controls.Add(suburbFilter);
-        filterToolbar.Controls.Add(postcodeFilter);
-        filterToolbar.Controls.Add(clearFiltersButton);
 
         TableLayoutPanel layout = new()
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 4,
+            RowCount = 3,
             Padding = new Padding(8)
         };
-        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         layout.Controls.Add(toolbar, 0, 0);
-        layout.Controls.Add(filterToolbar, 0, 1);
-        layout.Controls.Add(pricesGrid, 0, 2);
-        layout.Controls.Add(statusLabel, 0, 3);
+        layout.Controls.Add(pricesGrid, 0, 1);
+        layout.Controls.Add(statusLabel, 0, 2);
 
         Controls.Add(layout);
         Shown += async (_, _) =>
         {
             addressTextBox.Focus();
-            await LoadAllPricesAsync();
+            await LoadAllServosAsync();
+            PopulateFuelTypeFilter();
         };
         FormClosing += (_, _) => SaveUserPreferences();
     }
@@ -244,17 +205,21 @@ internal sealed class MainForm : Form
     /// <summary>
     /// Loads all available station prices and displays them in the results grid.
     /// </summary>
-    private async Task LoadAllPricesAsync()
+    private async Task LoadAllServosAsync()
     {
         SetBusy(true);
         statusLabel.Text = "Loading current prices...";
 
+        string fuelSelected = fuelTypeFilter.SelectedItem?.ToString() ?? "All fuel types";
+        fuelSelected = FuelTypeDisplay.GetFuelTypeApiCode(fuelSelected);
+
         try
         {
             FuelPriceData response = await ServoApiClient.GetFuelPricesAsync(Locals.ApiKey);
-            DisplayPrices(response, $"Showing all prices from {response.FuelPriceDetails.Count:N0} servos. Last refreshed {DateTime.Now:HH:mm:ss}.");
-            isFilteredByLocation = false;
-            SuburbPostcodeFiltersEnabled(true);
+            FuelPriceData filteredData = FuelDataUtils.FilterFuelType(response, fuelSelected);
+
+            DisplayPrices(filteredData, $"Showing all {filteredData.FuelPriceDetails.Count:N0} servos. Last refreshed {DateTime.Now:HH:mm:ss}.");
+            isAllServos = true;
         }
         catch (Exception exception)
         {
@@ -275,6 +240,9 @@ internal sealed class MainForm : Form
         string address = addressTextBox.Text.Trim();
         int stationCount = (int)stationCountInput.Value;
         bool useCurrentLocation = string.IsNullOrWhiteSpace(address);
+
+        string fuelSelected = fuelTypeFilter.SelectedItem?.ToString() ?? "All fuel types";
+        fuelSelected = FuelTypeDisplay.GetFuelTypeApiCode(fuelSelected);
 
         if (useCurrentLocation)
         {
@@ -301,7 +269,7 @@ internal sealed class MainForm : Form
             {
                 statusLabel.Text = "Finding address...";
                 
-                if (isGpsCoordinates(address))
+                if (GeoHelpers.isGpsCoordinates(address))
                 {
                     // Use the provided coordinates directly without geocoding.
                     string[] parts = address.Replace(" ", "").Split(',');
@@ -323,17 +291,11 @@ internal sealed class MainForm : Form
 
             statusLabel.Text = "Loading current prices...";
             FuelPriceData response = await ServoApiClient.GetFuelPricesAsync(Locals.ApiKey);
-            FuelPriceData nearestStations = ServoLocator.FindNearestServos(
-                response,
-                location.Latitude,
-                location.Longitude,
-                stationCount,
-                FuelTypeDisplay.GetFuelTypeApiCode(fuelTypeFilter.SelectedItem?.ToString() ?? "All fuel types"));
+            FuelPriceData filteredData = FuelDataUtils.FilterFuelType(response, fuelSelected);
+            filteredData = FuelDataUtils.FilterNearestServos(filteredData, location, stationCount);
 
-
-            isFilteredByLocation = true;
-            SuburbPostcodeFiltersEnabled(false);
-            DisplayPrices(nearestStations, $"Showing {nearestStations.FuelPriceDetails.Count:N0} nearest servos to {locationDescription}. Last refreshed {DateTime.Now:HH:mm:ss}.");
+            DisplayPrices(filteredData, $"Showing {filteredData.FuelPriceDetails.Count:N0} nearest servos to {locationDescription}. Last refreshed {DateTime.Now:HH:mm:ss}.");
+            isAllServos = false;
         }
         catch (Exception exception)
         {
@@ -367,9 +329,8 @@ internal sealed class MainForm : Form
                 .Where(pricerow => !pricerow.Price.Equals("unavailable", StringComparison.CurrentCultureIgnoreCase)));
         }
 
-        PopulateFuelTypeFilter();
         statusPrefix = status;
-        ApplyFiltersAndSort();
+        ApplySort();
     }
 
     /// <summary>
@@ -377,8 +338,6 @@ internal sealed class MainForm : Form
     /// </summary>
     private void PopulateFuelTypeFilter()
     {
-        if (isFilteredByLocation) return;
-
         string selectedFuelType = fuelTypeFilter.SelectedItem?.ToString()
             ?? FuelTypeDisplay.GetFuelTypeDisplayName(userPreferences.FuelType);
 
@@ -391,16 +350,6 @@ internal sealed class MainForm : Form
             fuelTypeFilter.Items.Add(fuelType);
         }
 
-        foreach (string fuelType in loadedRows
-            .Select(row => row.FuelType)
-            .Where(fuelType => !string.IsNullOrWhiteSpace(fuelType) && fuelType != "No price reported")
-            .Distinct(StringComparer.CurrentCultureIgnoreCase)
-            .Where(fuelType => !FuelTypeDisplay.displayOrder.Contains(fuelType, StringComparer.CurrentCultureIgnoreCase))
-            .OrderBy(fuelType => fuelType, StringComparer.CurrentCultureIgnoreCase))
-        {
-            fuelTypeFilter.Items.Add(fuelType);
-        }
-
         fuelTypeFilter.SelectedItem = fuelTypeFilter.Items.Contains(selectedFuelType)
             ? selectedFuelType
             : "All fuel types";
@@ -409,45 +358,38 @@ internal sealed class MainForm : Form
 
     private async Task ApplyFuelTypeFilterAsync()
     {
-        if (isFilteredByLocation)
+        SetBusy(true);
+        try
         {
-            await FindNearestPricesAsync();
-            SaveUserPreferences();
+            if (isAllServos) await LoadAllServosAsync(); else await FindNearestPricesAsync();
+            
         }
-        else
+        catch (Exception exception)
         {
-            ApplyFiltersAndSort();
+            ShowError("Could not apply filter", exception);
+        }
+        finally
+        {
+            SetBusy(false);
         }
     }
 
     /// <summary>
     /// Applies the active filters and sort order, then refreshes the grid binding.
     /// </summary>
-    private void ApplyFiltersAndSort()
+    private void ApplySort()
     {
-        //if (isFilteredByLocation) return;
-
-        string selectedFuelType = fuelTypeFilter.SelectedItem?.ToString() ?? "All fuel types";
-        string suburb = suburbFilter.Text.Trim();
-        string postcode = postcodeFilter.Text.Trim();
-
-        // Filters are applied to the complete loaded set before sorting the visible rows.
-        IEnumerable<PriceRow> filteredRows = loadedRows.Where(row =>
-            (selectedFuelType == "All fuel types" || string.Equals(row.FuelType, selectedFuelType, StringComparison.CurrentCultureIgnoreCase)) &&
-            (isFilteredByLocation || suburb.Length == 0 || row.Suburb.Contains(suburb, StringComparison.CurrentCultureIgnoreCase)) &&
-            (isFilteredByLocation || postcode.Length == 0 || row.Postcode.Contains(postcode, StringComparison.CurrentCultureIgnoreCase)));
-
         // Use the raw numeric and timestamp values so sorting is not based on display strings.
         IEnumerable<PriceRow> sortedRows = sortColumnName switch
         {
-            nameof(PriceRow.Station) => filteredRows.OrderBy(row => row.Station, StringComparer.CurrentCultureIgnoreCase),
-            nameof(PriceRow.Address) => filteredRows.OrderBy(row => row.Address, StringComparer.CurrentCultureIgnoreCase),
-            nameof(PriceRow.Suburb) => filteredRows.OrderBy(row => row.Suburb, StringComparer.CurrentCultureIgnoreCase),
-            nameof(PriceRow.Postcode) => filteredRows.OrderBy(row => row.Postcode, StringComparer.CurrentCultureIgnoreCase),
-            nameof(PriceRow.FuelType) => filteredRows.OrderBy(row => row.FuelType, StringComparer.CurrentCultureIgnoreCase),
-            nameof(PriceRow.Price) => filteredRows.OrderBy(row => row.PriceValue),
-            nameof(PriceRow.UpdatedAt) => filteredRows.OrderBy(row => row.UpdatedAtValue),
-            _ => filteredRows
+            nameof(PriceRow.Station) => loadedRows.OrderBy(row => row.Station, StringComparer.CurrentCultureIgnoreCase),
+            nameof(PriceRow.Address) => loadedRows.OrderBy(row => row.Address, StringComparer.CurrentCultureIgnoreCase),
+            nameof(PriceRow.Suburb) => loadedRows.OrderBy(row => row.Suburb, StringComparer.CurrentCultureIgnoreCase),
+            nameof(PriceRow.Postcode) => loadedRows.OrderBy(row => row.Postcode, StringComparer.CurrentCultureIgnoreCase),
+            nameof(PriceRow.FuelType) => loadedRows.OrderBy(row => row.FuelType, StringComparer.CurrentCultureIgnoreCase),
+            nameof(PriceRow.Price) => loadedRows.OrderBy(row => row.PriceValue),
+            nameof(PriceRow.UpdatedAt) => loadedRows.OrderBy(row => row.UpdatedAtValue),
+            _ => loadedRows
         };
 
         if (sortColumnName is not null && !sortAscending)
@@ -482,7 +424,7 @@ internal sealed class MainForm : Form
             sortAscending = true;
         }
 
-        ApplyFiltersAndSort();
+        ApplySort();
     }
 
     /// <summary>
@@ -504,36 +446,9 @@ internal sealed class MainForm : Form
     private void SaveUserPreferences()
     {
         userPreferences.FuelType = fuelTypeFilter.SelectedItem?.ToString() ?? userPreferences.FuelType;
-        userPreferences.Suburb = suburbFilter.Text.Trim();
-        userPreferences.Postcode = postcodeFilter.Text.Trim();
         userPreferences.SortColumnName = sortColumnName;
         userPreferences.SortAscending = sortAscending;
         UserPreferencesService.Save(userPreferences);
-    }
-
-    /// <summary>
-    /// Resets all filters to their default values.
-    /// </summary>
-    private void ClearFilters()
-    {
-        suburbFilter.Clear();
-        postcodeFilter.Clear();
-        if (fuelTypeFilter.Items.Count > 0)
-        {
-            fuelTypeFilter.SelectedIndex = 0;
-        }
-    }
-
-    /// <summary>
-    /// 
-    /// </summary>
-    /// <param name="isVisible"></param>
-    private void SuburbPostcodeFiltersEnabled(bool enable)
-    {
-        suburbFilter.Clear();
-        postcodeFilter.Clear();
-        suburbFilter.Enabled = enable;
-        postcodeFilter.Enabled = enable;
     }
 
     /// <summary>
@@ -545,11 +460,8 @@ internal sealed class MainForm : Form
         addressTextBox.Enabled = !isBusy;
         stationCountInput.Enabled = !isBusy;
         fuelTypeFilter.Enabled = !isBusy;
-        suburbFilter.Enabled = !isBusy;
-        postcodeFilter.Enabled = !isBusy;
-        clearFiltersButton.Enabled = !isBusy;
         searchButton.Enabled = !isBusy;
-        refreshButton.Enabled = !isBusy;
+        allServosButton.Enabled = !isBusy;
         Cursor = isBusy ? Cursors.WaitCursor : Cursors.Default;
     }
 
@@ -584,19 +496,6 @@ internal sealed class MainForm : Form
             UpdatedAtValue = price?.UpdatedAt ?? detail.UpdatedAt,
             UpdatedAt = price?.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
         };
-    }
-
-    private static bool isGpsCoordinates(string input)
-    {
-        string[] parts = input.Replace(" ", "").Split(',');
-        if (parts.Length != 2)
-        {
-            return false;
-        }
-        return double.TryParse(parts[0].Trim(), out double latitude) &&
-               double.TryParse(parts[1].Trim(), out double longitude) &&
-               latitude >= -90 && latitude <= 90 &&
-               longitude >= -180 && longitude <= 180;
     }
 
     /// <summary>
