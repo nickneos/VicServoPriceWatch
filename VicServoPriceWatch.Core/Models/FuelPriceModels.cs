@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using VicServoPriceWatch.Core.Utils;
 
 namespace VicServoPriceWatch.Core.Models;
 
@@ -48,6 +49,40 @@ public sealed class FuelPriceDetail
     /// </summary>
     [JsonPropertyName("updatedAt")]
     public DateTimeOffset UpdatedAt { get; set; }
+
+    /// <summary>
+    /// Converts the station data into a list of display rows.
+    /// One row per fuel type is created, even if the station has not reported a price for that fuel type.
+    /// </summary>
+    /// <param name="detail">The station-level API response.</param>
+    /// <param name="price">The fuel price to display, if one is available.</param>
+    /// <returns>A list of display rows.</returns>
+    public List<PriceRow> CreatePriceRows()
+    {
+        if (this.FuelPrices.Count == 0) return [];
+        
+        List<PriceRow> rows = new List<PriceRow>();
+
+        foreach (FuelPrice price in this.FuelPrices)
+        {
+            if (price.Price is null) continue;
+
+            PriceRow row = new PriceRow
+            {
+                Station = this.FuelStation.Name,
+                Address = this.FuelStation.Address,
+                Suburb = this.FuelStation.Suburb ?? string.Empty,
+                Postcode = this.FuelStation.Postcode ?? string.Empty,
+                FuelType = FuelTypeDisplay.GetFuelTypeDisplayName(price.FuelType),
+                PriceValue = price.Price,
+                Price = $"{price.Price:F1}",
+                UpdatedAtValue = this.UpdatedAt,
+                UpdatedAt = this.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+            };
+            rows.Add(row);
+        }
+        return rows;
+    }
 }
 
 /// <summary>
@@ -218,4 +253,20 @@ public sealed class FuelPrice
     /// </summary>
     [JsonPropertyName("updatedAt")]
     public DateTimeOffset UpdatedAt { get; set; }
+}
+
+/// <summary>
+/// Represents one station/fuel-price row displayed in the results grid.
+/// </summary>
+public sealed class PriceRow
+{
+    public string Station { get; init; } = string.Empty;
+    public string Address { get; init; } = string.Empty;
+    public string Suburb { get; init; } = string.Empty;
+    public string Postcode { get; init; } = string.Empty;
+    public string FuelType { get; init; } = string.Empty;
+    public string Price { get; init; } = string.Empty;
+    public decimal? PriceValue { get; init; }
+    public DateTimeOffset UpdatedAtValue { get; init; }
+    public string UpdatedAt { get; init; } = string.Empty;
 }

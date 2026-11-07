@@ -318,15 +318,7 @@ internal sealed class MainForm : Form
 
         foreach (FuelPriceDetail detail in response.FuelPriceDetails)
         {
-            if (detail.FuelPrices.Count == 0)
-            {
-                loadedRows.Add(CreatePriceRow(detail, null));
-                continue;
-            }
-
-            loadedRows.AddRange(detail.FuelPrices
-                .Select(fuelprice => CreatePriceRow(detail, fuelprice))
-                .Where(pricerow => !pricerow.Price.Equals("unavailable", StringComparison.CurrentCultureIgnoreCase)));
+            loadedRows.AddRange(detail.CreatePriceRows());
         }
 
         statusPrefix = status;
@@ -476,41 +468,5 @@ internal sealed class MainForm : Form
         MessageBox.Show(this, exception.Message, title, MessageBoxButtons.OK, MessageBoxIcon.Error);
     }
 
-    /// <summary>
-    /// Creates a display row for a station and one of its fuel prices.
-    /// </summary>
-    /// <param name="detail">The station-level API response.</param>
-    /// <param name="price">The fuel price to display, if one is available.</param>
-    /// <returns>A formatted row for the results grid.</returns>
-    private static PriceRow CreatePriceRow(FuelPriceDetail detail, FuelPrice? price)
-    {
-        return new PriceRow
-        {
-            Station = detail.FuelStation.Name,
-            Address = detail.FuelStation.Address,
-            Suburb = detail.FuelStation.Suburb ?? string.Empty,
-            Postcode = detail.FuelStation.Postcode ?? string.Empty,
-            FuelType = price is null ? "No price reported" : FuelTypeDisplay.GetFuelTypeDisplayName(price.FuelType),
-            PriceValue = price?.Price,
-            Price = price?.Price is decimal value ? $"{value:F1}" : "Unavailable",
-            UpdatedAtValue = price?.UpdatedAt ?? detail.UpdatedAt,
-            UpdatedAt = price?.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
-        };
-    }
-
-    /// <summary>
-    /// Represents one station/fuel-price row displayed in the results grid.
-    /// </summary>
-    private sealed class PriceRow
-    {
-        public string Station { get; init; } = string.Empty;
-        public string Address { get; init; } = string.Empty;
-        public string Suburb { get; init; } = string.Empty;
-        public string Postcode { get; init; } = string.Empty;
-        public string FuelType { get; init; } = string.Empty;
-        public string Price { get; init; } = string.Empty;
-        public decimal? PriceValue { get; init; }
-        public DateTimeOffset UpdatedAtValue { get; init; }
-        public string UpdatedAt { get; init; } = string.Empty;
-    }
+    
 }
