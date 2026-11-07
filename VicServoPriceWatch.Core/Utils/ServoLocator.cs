@@ -12,11 +12,17 @@ public class ServoLocator
     /// <param name="latitude">The latitude of the reference location.</param>
     /// <param name="longitude">The longitude of the reference location.</param>
     /// <param name="limitTo">The maximum number of nearest stations to return.</param>
+    /// <param name="fuelType">The fuel type to filter by, or "All fuel types" to include all fuel types.</param>
     /// <returns>A new <see cref="FuelPriceData"/> instance containing the nearest stations.</returns>
-    public static FuelPriceData FindNearestServos(FuelPriceData fuelPriceData, double latitude, double longitude, int limitTo = 10)
+    public static FuelPriceData FindNearestServos(FuelPriceData fuelPriceData, double latitude, double longitude, int limitTo = 10, string fuelType = "All fuel types")
     {
+        bool includeAllFuelTypes = fuelType.Equals("All fuel types", StringComparison.OrdinalIgnoreCase);
+
         var filteredData = fuelPriceData.FuelPriceDetails
-            .Where(detail => detail.FuelStation is not null)
+            .Where(detail =>
+                detail.FuelStation is not null &&
+                (includeAllFuelTypes ||
+                 detail.FuelPrices.Any(price => price.FuelType == fuelType)))
             .Select(detail => new
             {
                 Detail = detail,
@@ -28,7 +34,14 @@ public class ServoLocator
             })
             .OrderBy(item => item.Distance)
             .Take(limitTo)
-            .Select(item => item.Detail)
+            .Select(item => new FuelPriceDetail
+            {
+                FuelStation = item.Detail.FuelStation!,
+                FuelPrices = item.Detail.FuelPrices
+                    .Where(price => includeAllFuelTypes || price.FuelType == fuelType)
+                    .ToList(),
+                UpdatedAt = item.Detail.UpdatedAt
+            })
             .ToList();
 
         return new FuelPriceData

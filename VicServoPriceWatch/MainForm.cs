@@ -10,36 +10,6 @@ namespace VicServoPriceWatch;
 /// </summary>
 internal sealed class MainForm : Form
 {
-    private static readonly string[] fuelTypeDisplayOrder =
-    [
-        "U91",
-        "U95",
-        "U98",
-        "Diesel",
-        "Premium Diesel",
-        "E10",
-        "E85",
-        "Biodiesel 20",
-        "LPG",
-        "LNG",
-        "CNG"
-    ];
-
-    private static readonly Dictionary<string, string> fuelTypeDisplayNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        ["U91"] = "U91",
-        ["P95"] = "U95",
-        ["P98"] = "U98",
-        ["DSL"] = "Diesel",
-        ["PDSL"] = "Premium Diesel",
-        ["E10"] = "E10",
-        ["E85"] = "E85",
-        ["B20"] = "Biodiesel 20",
-        ["LPG"] = "LPG",
-        ["LNG"] = "LNG",
-        ["CNG"] = "CNG"
-    };
-
     // Input controls for the nearest-station search.
     private readonly TextBox addressTextBox = new();
     private readonly NumericUpDown stationCountInput = new();
@@ -67,6 +37,9 @@ internal sealed class MainForm : Form
     // Current grid sort state. A null column means that no explicit sort has been applied.
     private string? sortColumnName;
     private bool sortAscending = true;
+
+    //
+    private bool isFilteredByLocation = false;
 
     // Preferences loaded from and saved to the local application data directory.
     private readonly UserPreferences userPreferences;
@@ -96,7 +69,7 @@ internal sealed class MainForm : Form
         // Configure filters and refresh the grid whenever a filter changes.
         fuelTypeFilter.DropDownStyle = ComboBoxStyle.DropDownList;
         fuelTypeFilter.Width = 100;
-        fuelTypeFilter.SelectedIndexChanged += (_, _) => ApplyFiltersAndSort();
+        fuelTypeFilter.SelectedIndexChanged += async (_, _) => await ApplyFuelTypeFilterAsync();
 
         suburbFilter.PlaceholderText = "Suburb";
         suburbFilter.Width = 130;
@@ -280,6 +253,8 @@ internal sealed class MainForm : Form
         {
             FuelPriceData response = await ServoApiClient.GetFuelPricesAsync(Locals.ApiKey);
             DisplayPrices(response, $"Showing all prices from {response.FuelPriceDetails.Count:N0} servos. Last refreshed {DateTime.Now:HH:mm:ss}.");
+            isFilteredByLocation = false;
+            SuburbPostcodeFiltersEnabled(true);
         }
         catch (Exception exception)
         {
@@ -352,8 +327,12 @@ internal sealed class MainForm : Form
                 response,
                 location.Latitude,
                 location.Longitude,
-                stationCount);
+                stationCount,
+                FuelTypeDisplay.GetFuelTypeApiCode(fuelTypeFilter.SelectedItem?.ToString() ?? "All fuel types"));
 
+
+            isFilteredByLocation = true;
+            SuburbPostcodeFiltersEnabled(false);
             DisplayPrices(nearestStations, $"Showing {nearestStations.FuelPriceDetails.Count:N0} nearest servos to {locationDescription}. Last refreshed {DateTime.Now:HH:mm:ss}.");
         }
         catch (Exception exception)
@@ -398,14 +377,16 @@ internal sealed class MainForm : Form
     /// </summary>
     private void PopulateFuelTypeFilter()
     {
+        if (isFilteredByLocation) return;
+
         string selectedFuelType = fuelTypeFilter.SelectedItem?.ToString()
-            ?? GetFuelTypeDisplayName(userPreferences.FuelType);
+            ?? FuelTypeDisplay.GetFuelTypeDisplayName(userPreferences.FuelType);
 
         fuelTypeFilter.BeginUpdate();
         fuelTypeFilter.Items.Clear();
         fuelTypeFilter.Items.Add("All fuel types");
 
-        foreach (string fuelType in fuelTypeDisplayOrder)
+        foreach (string fuelType in FuelTypeDisplay.displayOrder)
         {
             fuelTypeFilter.Items.Add(fuelType);
         }
@@ -414,7 +395,7 @@ internal sealed class MainForm : Form
             .Select(row => row.FuelType)
             .Where(fuelType => !string.IsNullOrWhiteSpace(fuelType) && fuelType != "No price reported")
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
-            .Where(fuelType => !fuelTypeDisplayOrder.Contains(fuelType, StringComparer.CurrentCultureIgnoreCase))
+            .Where(fuelType => !FuelTypeDisplay.displayOrder.Contains(fuelType, StringComparer.CurrentCultureIgnoreCase))
             .OrderBy(fuelType => fuelType, StringComparer.CurrentCultureIgnoreCase))
         {
             fuelTypeFilter.Items.Add(fuelType);
@@ -426,11 +407,26 @@ internal sealed class MainForm : Form
         fuelTypeFilter.EndUpdate();
     }
 
+    private async Task ApplyFuelTypeFilterAsync()
+    {
+        if (isFilteredByLocation)
+        {
+            await FindNearestPricesAsync();
+            SaveUserPreferences();
+        }
+        else
+        {
+            ApplyFiltersAndSort();
+        }
+    }
+
     /// <summary>
     /// Applies the active filters and sort order, then refreshes the grid binding.
     /// </summary>
     private void ApplyFiltersAndSort()
     {
+        //if (isFilteredByLocation) return;
+
         string selectedFuelType = fuelTypeFilter.SelectedItem?.ToString() ?? "All fuel types";
         string suburb = suburbFilter.Text.Trim();
         string postcode = postcodeFilter.Text.Trim();
@@ -438,8 +434,8 @@ internal sealed class MainForm : Form
         // Filters are applied to the complete loaded set before sorting the visible rows.
         IEnumerable<PriceRow> filteredRows = loadedRows.Where(row =>
             (selectedFuelType == "All fuel types" || string.Equals(row.FuelType, selectedFuelType, StringComparison.CurrentCultureIgnoreCase)) &&
-            (suburb.Length == 0 || row.Suburb.Contains(suburb, StringComparison.CurrentCultureIgnoreCase)) &&
-            (postcode.Length == 0 || row.Postcode.Contains(postcode, StringComparison.CurrentCultureIgnoreCase)));
+            (isFilteredByLocation || suburb.Length == 0 || row.Suburb.Contains(suburb, StringComparison.CurrentCultureIgnoreCase)) &&
+            (isFilteredByLocation || postcode.Length == 0 || row.Postcode.Contains(postcode, StringComparison.CurrentCultureIgnoreCase)));
 
         // Use the raw numeric and timestamp values so sorting is not based on display strings.
         IEnumerable<PriceRow> sortedRows = sortColumnName switch
@@ -529,6 +525,18 @@ internal sealed class MainForm : Form
     }
 
     /// <summary>
+    /// 
+    /// </summary>
+    /// <param name="isVisible"></param>
+    private void SuburbPostcodeFiltersEnabled(bool enable)
+    {
+        suburbFilter.Clear();
+        postcodeFilter.Clear();
+        suburbFilter.Enabled = enable;
+        postcodeFilter.Enabled = enable;
+    }
+
+    /// <summary>
     /// Enables or disables controls while an asynchronous data operation is running.
     /// </summary>
     /// <param name="isBusy">Whether the form is currently processing an operation.</param>
@@ -570,24 +578,12 @@ internal sealed class MainForm : Form
             Address = detail.FuelStation.Address,
             Suburb = detail.FuelStation.Suburb ?? string.Empty,
             Postcode = detail.FuelStation.Postcode ?? string.Empty,
-            FuelType = price is null ? "No price reported" : GetFuelTypeDisplayName(price.FuelType),
+            FuelType = price is null ? "No price reported" : FuelTypeDisplay.GetFuelTypeDisplayName(price.FuelType),
             PriceValue = price?.Price,
             Price = price?.Price is decimal value ? $"{value:F1}" : "Unavailable",
             UpdatedAtValue = price?.UpdatedAt ?? detail.UpdatedAt,
             UpdatedAt = price?.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? detail.UpdatedAt.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
         };
-    }
-
-    /// <summary>
-    /// Converts an API fuel-type code to the name shown in the user interface.
-    /// </summary>
-    /// <param name="fuelType">The API fuel-type code or display name.</param>
-    /// <returns>The user-facing fuel-type name.</returns>
-    private static string GetFuelTypeDisplayName(string fuelType)
-    {
-        return fuelTypeDisplayNames.TryGetValue(fuelType, out string? displayName)
-            ? displayName
-            : fuelType;
     }
 
     private static bool isGpsCoordinates(string input)
