@@ -1,4 +1,6 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<Import Project="secrets.props" Condition="Exists('secrets.props')" />
 
 	<PropertyGroup>
 		<TargetFrameworks>net10.0-android</TargetFrameworks>
@@ -22,7 +24,7 @@
 		<ApplicationTitle>VicServoPriceWatch.Android</ApplicationTitle>
 
 		<!-- App Identifier -->
-		<ApplicationId>com.companyname.vicservopricewatch.android</ApplicationId>
+		<ApplicationId>com.nneos.vicservopricewatch.android</ApplicationId>
 
 		<!-- Versions -->
 		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -30,6 +32,12 @@
 
 		<SupportedOSPlatformVersion>21.0</SupportedOSPlatformVersion>
 	</PropertyGroup>
+
+	<!-- 2. Pass the key to AndroidManifestPlaceholders for Android builds -->
+	<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">
+		<AndroidManifestPlaceholders>GOOGLE_MAPS_API_KEY=$(GoogleMapsApiKey)</AndroidManifestPlaceholders>
+	</PropertyGroup>
+
 
 	<ItemGroup>
 		<!-- App Icon -->
@@ -52,6 +60,7 @@
 	<ItemGroup>
 		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
+		<PackageReference Include="Microsoft.Maui.Controls.Maps" Version="10.0.0" />
 	</ItemGroup>
 
 	<ItemGroup>
@@ -59,6 +68,9 @@
 	</ItemGroup>
 
 	<ItemGroup>
+	  <MauiXaml Update="LocationPickerPage.xaml">
+	    <Generator>MSBuild:Compile</Generator>
+	  </MauiXaml>
 	  <MauiXaml Update="SettingsPage.xaml">
 	    <Generator>MSBuild:Compile</Generator>
 	  </MauiXaml>

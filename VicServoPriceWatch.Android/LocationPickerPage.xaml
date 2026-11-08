@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:maps="http://schemas.microsoft.com/dotnet/2021/maui/maps"
+             x:Class="VicServoPriceWatch.Android.LocationPickerPage"
+             Title="Select location">
+
+    <Grid RowDefinitions="*,Auto" RowSpacing="0">
+        <maps:Map
+            x:Name="LocationMap"
+            Grid.Row="0"
+            MapType="Street"
+            IsShowingUser="True"
+            MapClicked="OnMapClicked" />
+
+        <Button
+            Grid.Row="0"
+            Text="⌖"
+            FontSize="24"
+            SemanticProperties.Description="Use my current location"
+            Clicked="OnCurrentLocationClicked"
+            HorizontalOptions="End"
+            VerticalOptions="End"
+            Margin="0,0,16,96"
+            Padding="8,2"
+            WidthRequest="52"
+            HeightRequest="52"
+            CornerRadius="26" />
+
+        <VerticalStackLayout
+            Grid.Row="1"
+            Padding="16"
+            Spacing="10"
+            BackgroundColor="{AppThemeBinding Light=White, Dark=#202020}">
+            <Label
+                x:Name="SelectionStatusLabel"
+                Text="Tap the map to select a location."
+                SemanticProperties.HeadingLevel="Level2" />
+
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <Entry 
+                    Grid.Column="0" 
+                    x:Name="AddressSearchEntry" 
+                    Placeholder="Search for an address" 
+                    ReturnType="Search" 
+                    HorizontalOptions="Fill" />
+
+                <Button
+                    Grid.Column="1"
+                    x:Name="SearchAddressButton"
+                    Text="Search"
+                    Clicked="OnSearchAddressClicked" />
+
+                <Button
+                    Grid.Column="2"
+                    Text="Cancel"
+                    Clicked="OnCancelClicked" />
+            </Grid>
+
+            <Button
+                x:Name="ConfirmButton"
+                Text="Use selected location"
+                Clicked="OnConfirmClicked"
+                IsEnabled="False"
+                HorizontalOptions="Fill" />
+        </VerticalStackLayout>
+    </Grid>
+
+</ContentPage>

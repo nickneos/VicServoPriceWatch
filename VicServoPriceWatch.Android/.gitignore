@@ -1,3 +1,5 @@
+secrets.props
+
 # Build outputs
 bin/
 obj/

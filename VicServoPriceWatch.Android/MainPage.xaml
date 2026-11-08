@@ -20,15 +20,15 @@
 
             <Label
                 x:Name="LocationStatusLabel"
-                Text="Location has not been requested."
+                Text="No search location selected."
                 Style="{StaticResource SubHeadline}"
                 SemanticProperties.HeadingLevel="Level2" />
 
             <Button
-                x:Name="LocationButton"
-                Text="Use my location"
-                SemanticProperties.Hint="Requests permission and gets the current device location"
-                Clicked="OnGetLocationClicked"
+                x:Name="SelectLocationButton"
+                Text="Select location on map"
+                SemanticProperties.Hint="Opens a map where you can select your current location or another location"
+                Clicked="OnSelectLocationClicked"
                 HorizontalOptions="Fill" />
             
             <Label

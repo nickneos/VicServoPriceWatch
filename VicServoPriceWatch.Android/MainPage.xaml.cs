@@ -13,17 +13,15 @@ namespace VicServoPriceWatch.Android;
 /// </summary>
 public partial class MainPage : ContentPage
 {
-	private readonly AndroidLocationService locationService;
 	private readonly ApiKeyService apiKeyService;
+	private MauiLocation? selectedLocation;
 
 	/// <summary>
 	/// Initializes the home page with the Android location service.
 	/// </summary>
-	/// <param name="locationService">The service used to obtain the device location.</param>
 	/// <param name="apiKeyService">The service used to retrieve the saved API key.</param>
-	public MainPage(AndroidLocationService locationService, ApiKeyService apiKeyService)
+	public MainPage(ApiKeyService apiKeyService)
 	{
-		this.locationService = locationService;
 		this.apiKeyService = apiKeyService;
 		InitializeComponent();
 		FuelTypePicker.ItemsSource = new[] { "All fuel types" }
@@ -32,34 +30,29 @@ public partial class MainPage : ContentPage
 	}
 
 	/// <summary>
-	/// Gets the current device location and displays its coordinates.
+	/// Opens the map picker and stores the location selected by the user.
 	/// </summary>
-	private async void OnGetLocationClicked(object? sender, EventArgs e)
+	private async void OnSelectLocationClicked(object? sender, EventArgs e)
 	{
-		LocationButton.IsEnabled = false;
-		LocationStatusLabel.Text = "Getting your location...";
+		SelectLocationButton.IsEnabled = false;
 
 		try
 		{
-			MauiLocation location = await locationService.GetCurrentLocationAsync();
-			LocationStatusLabel.Text = $"Latitude: {location.Latitude:F6}\nLongitude: {location.Longitude:F6}";
-			SemanticScreenReader.Announce(LocationStatusLabel.Text);
-		}
-		catch (PermissionException exception)
-		{
-			LocationStatusLabel.Text = exception.Message;
-			SemanticScreenReader.Announce(LocationStatusLabel.Text);
-		}
-		catch (InvalidOperationException exception)
-		{
-			LocationStatusLabel.Text = exception.Message;
-			SemanticScreenReader.Announce(LocationStatusLabel.Text);
+			var pickerPage = new LocationPickerPage();
+			await Navigation.PushModalAsync(pickerPage);
+
+			MauiLocation? location = await pickerPage.SelectionTask;
+			if (location is not null)
+			{
+				selectedLocation = location;
+				LocationStatusLabel.Text = $"Selected location:\n{location.Latitude:F6}, {location.Longitude:F6}";
+				SemanticScreenReader.Announce(LocationStatusLabel.Text);
+			}
 		}
 		finally
 		{
-			LocationButton.IsEnabled = true;
+			SelectLocationButton.IsEnabled = true;
 		}
-
 	}
 
 	/// <summary>
@@ -79,7 +72,13 @@ public partial class MainPage : ContentPage
 				return;
 			}
 
-			MauiLocation location = await locationService.GetCurrentLocationAsync();
+			if (selectedLocation is null)
+			{
+				ResultsLabel.Text = "Select a location on the map before looking up fuel prices.";
+				return;
+			}
+
+			MauiLocation location = selectedLocation;
 			LocationStatusLabel.Text = $"Latitude: {location.Latitude:F6}\nLongitude: {location.Longitude:F6}";
 
 			FuelPriceData fuelPrices = await ServoApiClient.GetFuelPricesAsync(apiKey);
@@ -115,8 +114,10 @@ public partial class MainPage : ContentPage
 			FindServosButton.IsEnabled = true;
 		}
 	}
-
-	private async void OnNumberOfServosSliderValueChanged(object sender, ValueChangedEventArgs e)
+    /// <summary>
+    /// Updates the displayed number of nearby service stations.
+    /// </summary>
+    private async void OnNumberOfServosSliderValueChanged(object? sender, ValueChangedEventArgs e)
     {
         int newValue = (int)e.NewValue;
         NumberOfServosLabel.Text = $"Number of Servos: {newValue}";
