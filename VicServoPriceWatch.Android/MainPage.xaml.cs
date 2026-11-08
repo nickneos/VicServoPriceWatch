@@ -26,6 +26,9 @@ public partial class MainPage : ContentPage
 		this.locationService = locationService;
 		this.apiKeyService = apiKeyService;
 		InitializeComponent();
+		FuelTypePicker.ItemsSource = new[] { "All fuel types" }
+			.Concat(FuelTypeDisplay.displayOrder)
+			.ToArray();
 	}
 
 	/// <summary>
@@ -80,12 +83,15 @@ public partial class MainPage : ContentPage
 			LocationStatusLabel.Text = $"Latitude: {location.Latitude:F6}\nLongitude: {location.Longitude:F6}";
 
 			FuelPriceData fuelPrices = await ServoApiClient.GetFuelPricesAsync(apiKey);
-			FuelPriceData nearestServos = ServoLocator.FindNearestServos(
+			string selectedFuelType = FuelTypePicker.SelectedItem?.ToString() ?? "All fuel types";
+			string fuelType = FuelTypeDisplay.GetFuelTypeApiCode(selectedFuelType);
+            fuelPrices = FuelDataUtils.FilterFuelType(fuelPrices, fuelType);
+            fuelPrices = FuelDataUtils.FilterNearestServos(
 				fuelPrices,
-				location.Latitude,
-				location.Longitude);
+				(location.Latitude, location.Longitude),
+				(int)NumberOfServosSlider.Value);
 
-			ResultsLabel.Text = FormatResults(nearestServos);
+			ResultsLabel.Text = FormatResults(fuelPrices);
 			SemanticScreenReader.Announce("Nearby servo results loaded.");
 		}
 		catch (PermissionException exception)
@@ -110,12 +116,19 @@ public partial class MainPage : ContentPage
 		}
 	}
 
-	/// <summary>
-	/// Formats nearby service-station data for display on the home page.
-	/// </summary>
-	/// <param name="fuelPriceData">The nearest service-station data.</param>
-	/// <returns>A readable summary of the nearest service stations.</returns>
-	private static string FormatResults(FuelPriceData fuelPriceData)
+	private async void OnNumberOfServosSliderValueChanged(object sender, ValueChangedEventArgs e)
+    {
+        int newValue = (int)e.NewValue;
+        NumberOfServosLabel.Text = $"Number of Servos: {newValue}";
+        await Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Formats nearby service-station data for display on the home page.
+    /// </summary>
+    /// <param name="fuelPriceData">The nearest service-station data.</param>
+    /// <returns>A readable summary of the nearest service stations.</returns>
+    private static string FormatResults(FuelPriceData fuelPriceData)
 	{
 		if (fuelPriceData.FuelPriceDetails.Count == 0)
 		{
@@ -129,16 +142,19 @@ public partial class MainPage : ContentPage
 			results.AppendLine(detail.FuelStation.Name);
 			results.AppendLine(detail.FuelStation.Address);
 
-			string prices = string.Join(
-				", ",
-				detail.FuelPrices
-					.Where(price => price.IsAvailable && price.Price.HasValue)
-					.Select(price => $"{price.FuelType}: {price.Price!.Value:C}"));
-
-			results.AppendLine(string.IsNullOrWhiteSpace(prices) ? "No available prices" : prices);
+			foreach (FuelPrice price in detail.FuelPrices)
+			{
+                if (!price.IsAvailable || !price.Price.HasValue)
+				{
+					continue;
+				}
+				results.AppendLine($"{FuelTypeDisplay.GetFuelTypeDisplayName(price.FuelType)}: {price.Price.Value:F2}");
+			}
 			results.AppendLine();
 		}
 
 		return results.ToString().TrimEnd();
 	}
 }
+
+

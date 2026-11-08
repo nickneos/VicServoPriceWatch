@@ -30,6 +30,25 @@
                 SemanticProperties.Hint="Requests permission and gets the current device location"
                 Clicked="OnGetLocationClicked"
                 HorizontalOptions="Fill" />
+            
+            <Label
+                x:Name="NumberOfServosLabel"
+                Text="Number of nearby servos to display: 10"
+                SemanticProperties.HeadingLevel="Level2" />
+
+            <Slider
+                x:Name="NumberOfServosSlider"
+                SemanticProperties.Hint="Number of nearby servos to display"
+                Minimum="1"
+                Maximum="100"
+                Value="10"
+                ValueChanged="OnNumberOfServosSliderValueChanged" />  
+
+            <Picker
+                x:Name="FuelTypePicker"
+                Title="Fuel type"
+                SemanticProperties.Description="Select a fuel type to display"
+                SelectedIndex="0" />
 
             <Button
                 x:Name="FindServosButton"
