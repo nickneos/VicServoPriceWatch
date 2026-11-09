@@ -1,5 +1,8 @@
 <Solution>
-  <Project Path="VicServoPriceWatch.Android/VicServoPriceWatch.Android.csproj" />
+  <Project Path="PostcodeTest/PostcodeTest.csproj" Id="8eab9d4b-710e-488b-8c25-682fd476d517" />
+  <Project Path="VicServoPriceWatch.Android/VicServoPriceWatch.Android.csproj">
+    <Deploy />
+  </Project>
   <Project Path="VicServoPriceWatch.Core/VicServoPriceWatch.Core.csproj" Id="78917499-42d3-4f21-99f6-ba1bf43f1936" />
   <Project Path="VicServoPriceWatch/VicServoPriceWatch.csproj" />
 </Solution>
