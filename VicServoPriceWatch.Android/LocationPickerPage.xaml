@@ -10,20 +10,35 @@
             x:Name="LocationMap"
             Grid.Row="0"
             MapType="Street"
-            IsShowingUser="True"
+            IsShowingUser="False"
             MapClicked="OnMapClicked" />
 
-        <VerticalStackLayout
-            Grid.Row="1"
-            Padding="16"
-            Spacing="10"
-            BackgroundColor="{AppThemeBinding Light=White, Dark=#202020}">
-            <Label
-                x:Name="SelectionStatusLabel"
-                Text="Tap the map to select a location."
-                SemanticProperties.HeadingLevel="Level2" />
+        <ImageButton
+            Grid.Row="0"
+            Source="my_location.svg"
+            BackgroundColor="White"
+            Padding="12"
+            WidthRequest="48"
+            HeightRequest="48"
+            CornerRadius="24"
+            HorizontalOptions="End"
+            VerticalOptions="End"
+            Margin="0,0,16,112"
+            ZIndex="2"
+            SemanticProperties.Description="Use my current location"
+            Clicked="OnCurrentLocationClicked" />
 
-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+        <VerticalStackLayout
+            Grid.Row="0"
+            Padding="16,12"
+            Spacing="8"
+            VerticalOptions="Start"
+            ZIndex="1">
+            <Grid
+                ColumnDefinitions="*,Auto"
+                ColumnSpacing="10"
+                Padding="10,4"
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#202020}">
                 <Entry
                     Grid.Column="0"
                     x:Name="AddressSearchEntry"
@@ -41,6 +56,7 @@
                 x:Name="AddressSuggestionsView"
                 HeightRequest="180"
                 IsVisible="False"
+                BackgroundColor="{AppThemeBinding Light=White, Dark=#202020}"
                 SelectionMode="Single"
                 SelectionChanged="OnAddressSuggestionSelected">
                 <CollectionView.ItemTemplate>
@@ -52,6 +68,17 @@
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
+        </VerticalStackLayout>
+
+        <VerticalStackLayout
+            Grid.Row="1"
+            Padding="16"
+            Spacing="10"
+            BackgroundColor="{AppThemeBinding Light=White, Dark=#202020}">
+            <Label
+                x:Name="SelectionStatusLabel"
+                Text="Tap the map to select a location."
+                SemanticProperties.HeadingLevel="Level2" />
 
             <Button
                 x:Name="ConfirmButton"

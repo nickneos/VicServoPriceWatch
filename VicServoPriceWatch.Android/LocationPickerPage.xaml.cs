@@ -43,7 +43,7 @@ public partial class LocationPickerPage : ContentPage
     public Task<MauiLocation?> SelectionTask => selectionSource.Task;
 
     /// <summary>
-    /// Requests location access so the map can display its native current-location control.
+    /// Requests location access so the custom current-location control can be used.
     /// </summary>
     protected override async void OnAppearing()
     {
@@ -64,6 +64,58 @@ public partial class LocationPickerPage : ContentPage
     private void OnMapClicked(object? sender, MapClickedEventArgs e)
     {
         SetSelectedLocation(e.Location, "Selected location");
+    }
+
+    /// <summary>
+    /// Gets the device location, selects it, and moves the map to it.
+    /// </summary>
+    private async void OnCurrentLocationClicked(object? sender, EventArgs e)
+    {
+        ImageButton currentLocationButton = (ImageButton)sender!;
+        currentLocationButton.IsEnabled = false;
+        SelectionStatusLabel.Text = "Getting your current location...";
+
+        try
+        {
+            PermissionStatus permissionStatus = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
+            if (permissionStatus != PermissionStatus.Granted)
+            {
+                permissionStatus = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
+            }
+
+            if (permissionStatus != PermissionStatus.Granted)
+            {
+                SelectionStatusLabel.Text = "Location access was not allowed.";
+                return;
+            }
+
+            MauiLocation? location = await Geolocation.Default.GetLocationAsync(
+                new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(15)));
+            if (location is null)
+            {
+                SelectionStatusLabel.Text = "The device did not provide a location.";
+                return;
+            }
+
+            SetSelectedLocation(location, "Current location");
+            LocationMap.MoveToRegion(MapSpan.FromCenterAndRadius(location, Distance.FromKilometers(1)));
+        }
+        catch (PermissionException)
+        {
+            SelectionStatusLabel.Text = "Location access was not allowed. Check Android permissions.";
+        }
+        catch (FeatureNotEnabledException)
+        {
+            SelectionStatusLabel.Text = "Turn on location services and try again.";
+        }
+        catch (FeatureNotSupportedException)
+        {
+            SelectionStatusLabel.Text = "Location is not available on this device.";
+        }
+        finally
+        {
+            currentLocationButton.IsEnabled = true;
+        }
     }
 
     /// <summary>
