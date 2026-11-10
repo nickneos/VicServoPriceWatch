@@ -17,15 +17,19 @@ public partial class LocationPickerPage : ContentPage
     private readonly ObservableCollection<string> addressSuggestions = new();
     private readonly TaskCompletionSource<MauiLocation?> selectionSource = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly PostcodeService postcodeService;
+    private CancellationTokenSource? suggestionDebounceCancellation;
     private IReadOnlyList<PostcodeData> postcodeData = Array.Empty<PostcodeData>();
-    private Task? postcodeLoadTask;
+    private readonly Dictionary<string, PostcodeData> suggestionLocations = new(StringComparer.OrdinalIgnoreCase);
     private MauiLocation? selectedLocation;
 
     /// <summary>
     /// Initializes the map-based location picker.
     /// </summary>
-    public LocationPickerPage()
+    /// <param name="postcodeService">The shared postcode data and suggestion service.</param>
+    public LocationPickerPage(PostcodeService postcodeService)
     {
+        this.postcodeService = postcodeService;
         InitializeComponent();
         AddressSuggestionsView.ItemsSource = addressSuggestions;
         LocationMap.MoveToRegion(MapSpan.FromCenterAndRadius(
@@ -51,8 +55,7 @@ public partial class LocationPickerPage : ContentPage
             await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
         }
 
-        postcodeLoadTask ??= LoadPostcodeDataAsync();
-        await postcodeLoadTask;
+        await LoadPostcodeDataAsync();
     }
 
     /// <summary>
@@ -68,7 +71,12 @@ public partial class LocationPickerPage : ContentPage
     /// </summary>
     private void OnAddressSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
-        UpdateAddressSuggestions(e.NewTextValue);
+        suggestionDebounceCancellation?.Cancel();
+        suggestionDebounceCancellation?.Dispose();
+
+        var cancellation = new CancellationTokenSource();
+        suggestionDebounceCancellation = cancellation;
+        _ = UpdateAddressSuggestionsAsync(e.NewTextValue, cancellation.Token);
     }
 
     /// <summary>
@@ -80,11 +88,7 @@ public partial class LocationPickerPage : ContentPage
 
         try
         {
-            IEnumerable<PostcodeData>? downloadedData = await PostcodeService.DownloadPostcodeDataAsync();
-            postcodeData = downloadedData?
-                .Where(record => !string.IsNullOrWhiteSpace(record.Locality) && !string.IsNullOrWhiteSpace(record.Postcode))
-                .ToArray()
-                ?? Array.Empty<PostcodeData>();
+            postcodeData = await postcodeService.GetPostcodeDataAsync();
 
             SelectionStatusLabel.Text = "Tap the map or search for a suburb or postcode.";
         }
@@ -98,27 +102,71 @@ public partial class LocationPickerPage : ContentPage
     /// Updates the visible locality and postcode suggestions.
     /// </summary>
     /// <param name="searchText">The current search text.</param>
-    private void UpdateAddressSuggestions(string? searchText)
+    private async Task UpdateAddressSuggestionsAsync(string? searchText, CancellationToken cancellationToken)
     {
-        addressSuggestions.Clear();
         string query = searchText?.Trim() ?? string.Empty;
         if (string.IsNullOrWhiteSpace(query) || postcodeData.Count == 0)
         {
-            AddressSuggestionsView.IsVisible = false;
+            await MainThread.InvokeOnMainThreadAsync(() => ClearAddressSuggestions());
             return;
         }
 
-        foreach (string suggestion in postcodeData
-            .Where(record => record.Locality.Contains(query, StringComparison.OrdinalIgnoreCase)
-                || record.Postcode.Contains(query, StringComparison.OrdinalIgnoreCase))
-            .Select(record => $"{record.Locality}, {record.Postcode}")
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Take(8))
+        try
         {
-            addressSuggestions.Add(suggestion);
-        }
+            await Task.Delay(TimeSpan.FromMilliseconds(250), cancellationToken);
+            IReadOnlyList<PostcodeData> matches = await Task.Run(
+                () => postcodeService.FindSuggestions(query),
+                cancellationToken);
 
-        AddressSuggestionsView.IsVisible = addressSuggestions.Count > 0;
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                addressSuggestions.Clear();
+                suggestionLocations.Clear();
+                foreach (PostcodeData postcode in matches)
+                {
+                    string suggestion = $"{postcode.Locality}, {postcode.State} {postcode.Postcode}";
+                    if (suggestionLocations.ContainsKey(suggestion))
+                    {
+                        continue;
+                    }
+
+                    suggestionLocations[suggestion] = postcode;
+                    addressSuggestions.Add(suggestion);
+                }
+
+                AddressSuggestionsView.IsVisible = addressSuggestions.Count > 0;
+            });
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>
+    /// Clears the visible address suggestions.
+    /// </summary>
+    private void ClearAddressSuggestions()
+    {
+        addressSuggestions.Clear();
+        suggestionLocations.Clear();
+        AddressSuggestionsView.IsVisible = false;
+    }
+
+    /// <summary>
+    /// Cancels pending autocomplete work when the page is dismissed.
+    /// </summary>
+    protected override void OnDisappearing()
+    {
+        suggestionDebounceCancellation?.Cancel();
+        suggestionDebounceCancellation?.Dispose();
+        suggestionDebounceCancellation = null;
+        selectionSource.TrySetResult(null);
+        base.OnDisappearing();
     }
 
     /// <summary>
@@ -127,21 +175,15 @@ public partial class LocationPickerPage : ContentPage
     private void OnAddressSuggestionSelected(object? sender, SelectionChangedEventArgs e)
     {
         string? suggestion = e.CurrentSelection.FirstOrDefault() as string;
-        if (suggestion is null)
+        if (suggestion is null || !suggestionLocations.TryGetValue(suggestion, out PostcodeData? postcode))
         {
             return;
         }
 
-        PostcodeData? postcode = postcodeData.FirstOrDefault(record =>
-            string.Equals($"{record.Locality}, {record.Postcode}", suggestion, StringComparison.OrdinalIgnoreCase));
         AddressSearchEntry.Text = suggestion;
         AddressSuggestionsView.SelectedItem = null;
         AddressSuggestionsView.IsVisible = false;
-
-        if (postcode is null)
-        {
-            return;
-        }
+        suggestionLocations.Clear();
 
         MauiLocation location = new(postcode.PreciseLatitude, postcode.PreciseLongitude);
         SetSelectedLocation(location, suggestion);
@@ -177,15 +219,6 @@ public partial class LocationPickerPage : ContentPage
     {
         selectionSource.TrySetResult(location);
         await Navigation.PopModalAsync();
-    }
-
-    /// <summary>
-    /// Completes the selection with no location when the page is dismissed by back navigation.
-    /// </summary>
-    protected override void OnDisappearing()
-    {
-        selectionSource.TrySetResult(null);
-        base.OnDisappearing();
     }
 
     /// <summary>

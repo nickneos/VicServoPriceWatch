@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using VicServoPriceWatch.Android.Services;
+using VicServoPriceWatch.Core.Services;
 
 namespace VicServoPriceWatch.Android;
 
@@ -19,6 +20,7 @@ public static class MauiProgram
 
 		builder.Services.AddSingleton<AndroidLocationService>();
 		builder.Services.AddSingleton<ApiKeyService>();
+		builder.Services.AddSingleton<PostcodeService>();
 
 #if DEBUG
 		builder.Logging.AddDebug();

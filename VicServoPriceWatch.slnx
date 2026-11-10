@@ -1,5 +1,7 @@
 <Solution>
+  <Project Path="BenchmarkSuite1/BenchmarkSuite1.csproj" />
   <Project Path="PostcodeTest/PostcodeTest.csproj" Id="8eab9d4b-710e-488b-8c25-682fd476d517" />
+  <Project Path="Test/Test.csproj" Id="02f2a3ac-df55-4af0-8fbd-9f42b234add9" />
   <Project Path="VicServoPriceWatch.Android/VicServoPriceWatch.Android.csproj">
     <Deploy />
   </Project>

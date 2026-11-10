@@ -14,15 +14,18 @@ namespace VicServoPriceWatch.Android;
 public partial class MainPage : ContentPage
 {
 	private readonly ApiKeyService apiKeyService;
+	private readonly PostcodeService postcodeService;
 	private MauiLocation? selectedLocation;
 
 	/// <summary>
-	/// Initializes the home page with the Android location service.
+	/// Initializes the home page with its shared application services.
 	/// </summary>
 	/// <param name="apiKeyService">The service used to retrieve the saved API key.</param>
-	public MainPage(ApiKeyService apiKeyService)
+	/// <param name="postcodeService">The shared postcode data and suggestion service.</param>
+	public MainPage(ApiKeyService apiKeyService, PostcodeService postcodeService)
 	{
 		this.apiKeyService = apiKeyService;
+		this.postcodeService = postcodeService;
 		InitializeComponent();
 		FuelTypePicker.ItemsSource = new[] { "All fuel types" }
 			.Concat(FuelTypeDisplay.displayOrder)
@@ -38,7 +41,7 @@ public partial class MainPage : ContentPage
 
 		try
 		{
-			var pickerPage = new LocationPickerPage();
+			var pickerPage = new LocationPickerPage(postcodeService);
 			await Navigation.PushModalAsync(pickerPage);
 
 			MauiLocation? location = await pickerPage.SelectionTask;
