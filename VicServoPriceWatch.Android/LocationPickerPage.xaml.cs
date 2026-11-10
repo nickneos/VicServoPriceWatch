@@ -1,6 +1,9 @@
+using System.Collections.ObjectModel;
 using Microsoft.Maui.Controls.Maps;
 using Microsoft.Maui.ApplicationModel;
 using Microsoft.Maui.Maps;
+using VicServoPriceWatch.Core.Models;
+using VicServoPriceWatch.Core.Services;
 using MauiLocation = Microsoft.Maui.Devices.Sensors.Location;
 
 namespace VicServoPriceWatch.Android;
@@ -11,8 +14,11 @@ namespace VicServoPriceWatch.Android;
 public partial class LocationPickerPage : ContentPage
 {
     private static readonly MauiLocation defaultLocation = new(-37.8136, 144.9631);
+    private readonly ObservableCollection<string> addressSuggestions = new();
     private readonly TaskCompletionSource<MauiLocation?> selectionSource = new(
         TaskCreationOptions.RunContinuationsAsynchronously);
+    private IReadOnlyList<PostcodeData> postcodeData = Array.Empty<PostcodeData>();
+    private Task? postcodeLoadTask;
     private MauiLocation? selectedLocation;
 
     /// <summary>
@@ -21,6 +27,7 @@ public partial class LocationPickerPage : ContentPage
     public LocationPickerPage()
     {
         InitializeComponent();
+        AddressSuggestionsView.ItemsSource = addressSuggestions;
         LocationMap.MoveToRegion(MapSpan.FromCenterAndRadius(
             defaultLocation,
             Distance.FromKilometers(25)));
@@ -43,6 +50,9 @@ public partial class LocationPickerPage : ContentPage
         {
             await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
         }
+
+        postcodeLoadTask ??= LoadPostcodeDataAsync();
+        await postcodeLoadTask;
     }
 
     /// <summary>
@@ -54,99 +64,88 @@ public partial class LocationPickerPage : ContentPage
     }
 
     /// <summary>
-    /// Gets the device location, marks it on the map, and selects it immediately.
+    /// Filters postcode suggestions as the user types.
     /// </summary>
-    private async void OnCurrentLocationClicked(object? sender, EventArgs e)
+    private void OnAddressSearchTextChanged(object? sender, TextChangedEventArgs e)
     {
-        Button currentLocationButton = (Button)sender!;
-        currentLocationButton.IsEnabled = false;
-        SelectionStatusLabel.Text = "Getting your current location...";
+        UpdateAddressSuggestions(e.NewTextValue);
+    }
+
+    /// <summary>
+    /// Loads the cached or downloaded postcode data used by the address suggestions.
+    /// </summary>
+    private async Task LoadPostcodeDataAsync()
+    {
+        SelectionStatusLabel.Text = "Loading suburb suggestions...";
 
         try
         {
-            PermissionStatus permissionStatus = await Permissions.CheckStatusAsync<Permissions.LocationWhenInUse>();
-            if (permissionStatus != PermissionStatus.Granted)
-            {
-                permissionStatus = await Permissions.RequestAsync<Permissions.LocationWhenInUse>();
-            }
+            IEnumerable<PostcodeData>? downloadedData = await PostcodeService.DownloadPostcodeDataAsync();
+            postcodeData = downloadedData?
+                .Where(record => !string.IsNullOrWhiteSpace(record.Locality) && !string.IsNullOrWhiteSpace(record.Postcode))
+                .ToArray()
+                ?? Array.Empty<PostcodeData>();
 
-            if (permissionStatus != PermissionStatus.Granted)
-            {
-                SelectionStatusLabel.Text = "Location access was not allowed.";
-                return;
-            }
-
-            MauiLocation? location = await Geolocation.Default.GetLocationAsync(
-                new GeolocationRequest(GeolocationAccuracy.Medium, TimeSpan.FromSeconds(15)));
-
-            if (location is null)
-            {
-                SelectionStatusLabel.Text = "The device did not provide a location.";
-                return;
-            }
-
-            SetSelectedLocation(location, "Current location");
-            LocationMap.MoveToRegion(MapSpan.FromCenterAndRadius(location, Distance.FromKilometers(1)));
+            SelectionStatusLabel.Text = "Tap the map or search for a suburb or postcode.";
         }
-        catch (PermissionException)
+        catch (Exception)
         {
-            SelectionStatusLabel.Text = "Location access was not allowed. Check Android permissions.";
-        }
-        catch (FeatureNotEnabledException)
-        {
-            SelectionStatusLabel.Text = "Turn on location services and try again.";
-        }
-        catch (FeatureNotSupportedException)
-        {
-            SelectionStatusLabel.Text = "Location is not available on this device.";
-        }
-        finally
-        {
-            currentLocationButton.IsEnabled = true;
+            SelectionStatusLabel.Text = "Suburb suggestions could not be loaded. You can still tap the map to select a location.";
         }
     }
 
     /// <summary>
-    /// Searches for an address and selects the first matching location.
+    /// Updates the visible locality and postcode suggestions.
     /// </summary>
-    private async void OnSearchAddressClicked(object? sender, EventArgs e)
+    /// <param name="searchText">The current search text.</param>
+    private void UpdateAddressSuggestions(string? searchText)
     {
-        string query = AddressSearchEntry.Text?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(query))
+        addressSuggestions.Clear();
+        string query = searchText?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(query) || postcodeData.Count == 0)
         {
-            SelectionStatusLabel.Text = "Enter an address to search.";
+            AddressSuggestionsView.IsVisible = false;
             return;
         }
 
-        SearchAddressButton.IsEnabled = false;
-        SelectionStatusLabel.Text = "Searching for the address...";
+        foreach (string suggestion in postcodeData
+            .Where(record => record.Locality.Contains(query, StringComparison.OrdinalIgnoreCase)
+                || record.Postcode.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Select(record => $"{record.Locality}, {record.Postcode}")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(8))
+        {
+            addressSuggestions.Add(suggestion);
+        }
 
-        try
-        {
-            IEnumerable<MauiLocation>? locations = await Geocoding.Default.GetLocationsAsync(query);
-            MauiLocation? location = locations?.FirstOrDefault();
+        AddressSuggestionsView.IsVisible = addressSuggestions.Count > 0;
+    }
 
-            if (location is null)
-            {
-                SelectionStatusLabel.Text = "No matching address was found.";
-                return;
-            }
+    /// <summary>
+    /// Selects a postcode suggestion and moves the map to its dataset coordinates.
+    /// </summary>
+    private void OnAddressSuggestionSelected(object? sender, SelectionChangedEventArgs e)
+    {
+        string? suggestion = e.CurrentSelection.FirstOrDefault() as string;
+        if (suggestion is null)
+        {
+            return;
+        }
 
-            SetSelectedLocation(location, query);
-            LocationMap.MoveToRegion(MapSpan.FromCenterAndRadius(location, Distance.FromKilometers(1)));
-        }
-        catch (Exception exception) when (exception is FeatureNotSupportedException or FeatureNotEnabledException)
+        PostcodeData? postcode = postcodeData.FirstOrDefault(record =>
+            string.Equals($"{record.Locality}, {record.Postcode}", suggestion, StringComparison.OrdinalIgnoreCase));
+        AddressSearchEntry.Text = suggestion;
+        AddressSuggestionsView.SelectedItem = null;
+        AddressSuggestionsView.IsVisible = false;
+
+        if (postcode is null)
         {
-            SelectionStatusLabel.Text = "Address search is not available on this device.";
+            return;
         }
-        catch (HttpRequestException)
-        {
-            SelectionStatusLabel.Text = "The address search could not be completed. Check your connection and try again.";
-        }
-        finally
-        {
-            SearchAddressButton.IsEnabled = true;
-        }
+
+        MauiLocation location = new(postcode.PreciseLatitude, postcode.PreciseLongitude);
+        SetSelectedLocation(location, suggestion);
+        LocationMap.MoveToRegion(MapSpan.FromCenterAndRadius(location, Distance.FromKilometers(1)));
     }
 
     /// <summary>

@@ -13,20 +13,6 @@
             IsShowingUser="True"
             MapClicked="OnMapClicked" />
 
-        <Button
-            Grid.Row="0"
-            Text="⌖"
-            FontSize="24"
-            SemanticProperties.Description="Use my current location"
-            Clicked="OnCurrentLocationClicked"
-            HorizontalOptions="End"
-            VerticalOptions="End"
-            Margin="0,0,16,96"
-            Padding="8,2"
-            WidthRequest="52"
-            HeightRequest="52"
-            CornerRadius="26" />
-
         <VerticalStackLayout
             Grid.Row="1"
             Padding="16"
@@ -37,25 +23,35 @@
                 Text="Tap the map to select a location."
                 SemanticProperties.HeadingLevel="Level2" />
 
-            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                <Entry 
-                    Grid.Column="0" 
-                    x:Name="AddressSearchEntry" 
-                    Placeholder="Search for an address" 
-                    ReturnType="Search" 
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <Entry
+                    Grid.Column="0"
+                    x:Name="AddressSearchEntry"
+                    Placeholder="Search suburb or postcode"
+                    TextChanged="OnAddressSearchTextChanged"
                     HorizontalOptions="Fill" />
 
                 <Button
                     Grid.Column="1"
-                    x:Name="SearchAddressButton"
-                    Text="Search"
-                    Clicked="OnSearchAddressClicked" />
-
-                <Button
-                    Grid.Column="2"
                     Text="Cancel"
                     Clicked="OnCancelClicked" />
             </Grid>
+
+            <CollectionView
+                x:Name="AddressSuggestionsView"
+                HeightRequest="180"
+                IsVisible="False"
+                SelectionMode="Single"
+                SelectionChanged="OnAddressSuggestionSelected">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Label
+                            Padding="12,8"
+                            Text="{Binding .}"
+                            FontSize="16" />
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
 
             <Button
                 x:Name="ConfirmButton"
